@@ -7,7 +7,6 @@ const { handleCommand } = require('../commands/registry');
 const logger = P({ level: 'info' });
 
 let baileys;
-let store;
 
 async function loadBaileys() {
   if (!baileys) {
@@ -15,9 +14,6 @@ async function loadBaileys() {
     baileys = module.default ? { ...module, default: module.default } : module;
   }
 
-  if (!store) {
-    store = baileys.makeInMemoryStore({ logger: P({ level: 'silent' }) });
-  }
 
   return baileys;
 }
@@ -48,7 +44,6 @@ async function startWhatsAppClient() {
     syncFullHistory: false
   });
 
-  store.bind(sock.ev);
 
   sock.ev.on('creds.update', saveCreds);
 
