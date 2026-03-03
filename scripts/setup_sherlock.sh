@@ -12,14 +12,28 @@ python3 -m pip install holehe
 python3 -m pip install maigret
 python3 -m pip install theHarvester
 
-INFOGA_PIP_SOURCE_DEFAULT="git+https://github.com/m4ll0k/Infoga.git"
+INFOGA_PIP_SOURCE_DEFAULT="git+https://github.com/robertswin/Infoga.git"
+INFOGA_PIP_SOURCE_FALLBACK_DEFAULT="https://codeload.github.com/robertswin/Infoga/zip/refs/heads/master"
 INFOGA_PIP_SOURCE="${INFOGA_PIP_SOURCE:-$INFOGA_PIP_SOURCE_DEFAULT}"
 
-if ! python3 -m pip install "${INFOGA_PIP_SOURCE}"; then
+if ! GIT_TERMINAL_PROMPT=0 python3 -m pip install "${INFOGA_PIP_SOURCE}"; then
   echo "Infoga installation failed from source: ${INFOGA_PIP_SOURCE}" >&2
-  echo "Hint: package 'infoga' memang tidak tersedia di PyPI. Gunakan source git atau mirror internal." >&2
-  echo "Contoh override: INFOGA_PIP_SOURCE='git+https://github.com/m4ll0k/Infoga.git' ./scripts/setup_sherlock.sh" >&2
-  exit 1
+  if [[ "${INFOGA_PIP_SOURCE}" == git+https://* ]]; then
+    echo "Trying fallback source (non-git archive): ${INFOGA_PIP_SOURCE_FALLBACK_DEFAULT}" >&2
+    if ! GIT_TERMINAL_PROMPT=0 python3 -m pip install "${INFOGA_PIP_SOURCE_FALLBACK_DEFAULT}"; then
+      echo "Infoga fallback installation also failed from source: ${INFOGA_PIP_SOURCE_FALLBACK_DEFAULT}" >&2
+      echo "Hint: package 'infoga' memang tidak tersedia di PyPI. Gunakan source git, archive publik, atau mirror internal." >&2
+      echo "Troubleshooting: cek kemungkinan git credential helper / git config url.*.insteadof global yang menyisipkan auth ke URL publik." >&2
+      echo "Contoh override: INFOGA_PIP_SOURCE='git+https://github.com/robertswin/Infoga.git' ./scripts/setup_sherlock.sh" >&2
+      exit 1
+    fi
+  else
+    echo "Fallback non-git archive tidak dijalankan karena source bukan git+https URL." >&2
+    echo "Hint: package 'infoga' memang tidak tersedia di PyPI. Gunakan source git, archive publik, atau mirror internal." >&2
+    echo "Troubleshooting: cek kemungkinan git credential helper / git config url.*.insteadof global yang menyisipkan auth ke URL publik." >&2
+    echo "Contoh override: INFOGA_PIP_SOURCE='git+https://github.com/robertswin/Infoga.git' ./scripts/setup_sherlock.sh" >&2
+    exit 1
+  fi
 fi
 
 SHERLOCK_CMD="./.venv/bin/sherlock"
