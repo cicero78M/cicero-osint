@@ -40,20 +40,22 @@ Jika source `git+https://...` gagal, script otomatis mencoba fallback non-git (a
 
 Jika server Anda memakai mirror/private git, override source tetap didukung dengan environment variable berikut saat setup:
 
+Catatan kompatibilitas: repo `robertswin/Infoga` bukan paket pip siap install (tidak memiliki `setup.py`/`pyproject.toml`) dan script utamanya berjalan di Python 2. Installer menyiapkan source + wrapper `./.venv/bin/infoga`; pastikan host memiliki `python2`/`python2.7` agar verifikasi Infoga lulus.
+
 ```bash
-INFOGA_PIP_SOURCE='git+https://<mirror-anda>/Infoga.git' ./scripts/setup_sherlock.sh
+INFOGA_SOURCE='https://<mirror-anda>/Infoga.git' ./scripts/setup_sherlock.sh
 ```
 
 Troubleshooting kredensial Infoga:
 
 ### Troubleshooting Infoga
 
-1. **Verifikasi source final yang dipakai installer (`INFOGA_PIP_SOURCE`)**
+1. **Verifikasi source final yang dipakai installer (`INFOGA_SOURCE`)**
    - Jalankan setup dan perhatikan log source final yang dicoba script (source utama + fallback archive).
    - Jika perlu memaksa source tertentu, set env secara eksplisit saat eksekusi:
 
    ```bash
-   INFOGA_PIP_SOURCE='git+https://github.com/robertswin/Infoga.git' ./scripts/setup_sherlock.sh
+   INFOGA_SOURCE='https://github.com/robertswin/Infoga.git' ./scripts/setup_sherlock.sh
    ```
 
 2. **Cek konfigurasi git global yang sering menyebabkan rewrite/auth**
@@ -78,7 +80,7 @@ Troubleshooting kredensial Infoga:
    - Jika akses GitHub langsung dibatasi oleh kebijakan jaringan/egress, arahkan installer ke mirror internal:
 
    ```bash
-   INFOGA_PIP_SOURCE='git+https://<mirror-internal-anda>/Infoga.git' ./scripts/setup_sherlock.sh
+   INFOGA_SOURCE='https://<mirror-internal-anda>/Infoga.git' ./scripts/setup_sherlock.sh
    ```
 
    Pendekatan ini direkomendasikan untuk environment produksi yang wajib lewat repository internal.
