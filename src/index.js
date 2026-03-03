@@ -41,10 +41,13 @@ async function bootstrap() {
   try {
     await verifyCommand(env.SHERLOCK_CMD, 'sherlock', [['--version'], ['--help']]);
     await verifyCommand(env.HOLEHE_CMD, 'holehe', [['--help']]);
+    await verifyCommand(env.EXIFTOOL_CMD, 'exiftool', [['-ver']]);
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Preflight tool gagal. Jalankan setup dependencies lalu restart service. Root cause:', error);
-    throw new Error('Sherlock/Holehe command tidak siap. Jalankan setup dependencies lalu restart service.');
+    throw new Error(
+      'Sherlock/Holehe/EXIFTOOL_CMD command tidak siap. Pastikan EXIFTool terpasang (Ubuntu: apt install exiftool), lalu jalankan setup dependencies dan restart service.'
+    );
   }
 
   await startWhatsAppClient();

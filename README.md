@@ -8,10 +8,11 @@ Project ini menjalankan perintah Sherlock, Holehe, dan Maigret melalui WhatsApp 
 - Python 3.10+
 - git
 - pm2
+- exiftool
 
 ```bash
 sudo apt update
-sudo apt install -y git curl python3 python3-venv python3-pip
+sudo apt install -y git curl python3 python3-venv python3-pip exiftool
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 sudo npm install -g pm2
@@ -41,6 +42,13 @@ MAIGRET_CMD=./.venv/bin/maigret
 ```
 
 Nilai di atas harus sama dengan output `Final command (.env)` dari `./scripts/setup_sherlock.sh` agar tidak terjadi instruksi campur untuk operator.
+
+
+Jika lokasi executable EXIFTool berbeda dari default, set override pada `.env`:
+
+```env
+EXIFTOOL_CMD=exiftool
+```
 
 ## 4) Jalankan bot
 

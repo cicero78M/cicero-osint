@@ -165,7 +165,7 @@ async function startWhatsAppClient() {
           {
             text: [
               '❌ *Analisis Metadata Gambar*',
-              'Proses EXIF gagal dijalankan.',
+              'Proses EXIF gagal dijalankan karena EXIF tool belum terpasang atau belum dikonfigurasi.',
               `Detail: ${error?.message || 'Terjadi kesalahan tidak terduga.'}`
             ].join('\n')
           },
