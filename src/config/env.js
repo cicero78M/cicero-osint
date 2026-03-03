@@ -38,12 +38,13 @@ const schema = z.object({
 });
 
 const env = schema.parse(process.env);
+const resolveFromCwd = (targetPath) => path.resolve(process.cwd(), targetPath);
 
-env.SESSION_DIR = path.resolve(process.cwd(), env.SESSION_DIR);
-env.SHERLOCK_WORKDIR = path.resolve(process.cwd(), env.SHERLOCK_WORKDIR);
-env.HOLEHE_WORKDIR = path.resolve(process.cwd(), env.HOLEHE_WORKDIR);
-env.MAIGRET_WORKDIR = path.resolve(process.cwd(), env.MAIGRET_WORKDIR);
-env.THEHARVESTER_WORKDIR = path.resolve(process.cwd(), env.THEHARVESTER_WORKDIR);
-env.INFOGA_WORKDIR = path.resolve(process.cwd(), env.INFOGA_WORKDIR);
+env.SESSION_DIR = resolveFromCwd(env.SESSION_DIR);
+env.SHERLOCK_WORKDIR = resolveFromCwd(env.SHERLOCK_WORKDIR);
+env.HOLEHE_WORKDIR = resolveFromCwd(env.HOLEHE_WORKDIR);
+env.MAIGRET_WORKDIR = resolveFromCwd(env.MAIGRET_WORKDIR);
+env.THEHARVESTER_WORKDIR = resolveFromCwd(env.THEHARVESTER_WORKDIR);
+env.INFOGA_WORKDIR = resolveFromCwd(env.INFOGA_WORKDIR);
 
 module.exports = { env };
