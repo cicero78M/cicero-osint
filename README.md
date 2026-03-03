@@ -35,6 +35,13 @@ cp .env.example .env
 
 Script ini akan menginstal Sherlock, Holehe, Maigret, theHarvester, dan Infoga ke `.venv`.
 
+Catatan penting untuk Infoga: package `infoga` tidak tersedia di PyPI, jadi installer memakai source git (`git+https://github.com/m4ll0k/Infoga.git`) secara default.
+Jika server Anda memakai mirror/private git, override source dengan environment variable berikut saat setup:
+
+```bash
+INFOGA_PIP_SOURCE='git+https://<mirror-anda>/Infoga.git' ./scripts/setup_sherlock.sh
+```
+
 Lalu ubah `.env` agar command Sherlock, Holehe, Maigret, theHarvester, dan Infoga memakai virtualenv (default binary):
 
 ```env

@@ -11,7 +11,16 @@ python3 -m pip install sherlock-project
 python3 -m pip install holehe
 python3 -m pip install maigret
 python3 -m pip install theHarvester
-python3 -m pip install infoga
+
+INFOGA_PIP_SOURCE_DEFAULT="git+https://github.com/m4ll0k/Infoga.git"
+INFOGA_PIP_SOURCE="${INFOGA_PIP_SOURCE:-$INFOGA_PIP_SOURCE_DEFAULT}"
+
+if ! python3 -m pip install "${INFOGA_PIP_SOURCE}"; then
+  echo "Infoga installation failed from source: ${INFOGA_PIP_SOURCE}" >&2
+  echo "Hint: package 'infoga' memang tidak tersedia di PyPI. Gunakan source git atau mirror internal." >&2
+  echo "Contoh override: INFOGA_PIP_SOURCE='git+https://github.com/m4ll0k/Infoga.git' ./scripts/setup_sherlock.sh" >&2
+  exit 1
+fi
 
 SHERLOCK_CMD="./.venv/bin/sherlock"
 HOLEHE_CMD="./.venv/bin/holehe"
