@@ -9,6 +9,18 @@ const logger = P({ level: 'info' });
 
 let baileys;
 const pendingExifRequests = new Map();
+const reconnectState = {
+  timer: null,
+  retryCount: 0,
+  nextAllowedAt: 0
+};
+const preKeyThrottleBySession = new Map();
+
+const PREKEY_SIGNATURE = /(prekeyerror|invalid\s+prekey\s+id)/i;
+const BASE_RECONNECT_DELAY_MS = 5_000;
+const MAX_RECONNECT_DELAY_MS = 60_000;
+const PREKEY_THROTTLE_WINDOW_MS = 2 * 60_000;
+const PREKEY_THROTTLE_LIMIT = 3;
 
 async function loadBaileys() {
   if (!baileys) {
@@ -50,6 +62,133 @@ async function startWhatsAppClient() {
 
   sock.ev.on('creds.update', saveCreds);
 
+  const getMessageContext = (key = {}) => ({
+    remoteJid: key.remoteJid || '-',
+    id: key.id || '-',
+    participant: key.participant || '-'
+  });
+
+  const toErrorText = (errorLike) => {
+    if (!errorLike) return '';
+    if (typeof errorLike === 'string') return errorLike;
+    return [
+      errorLike.message,
+      errorLike.data,
+      errorLike.output?.payload?.message,
+      errorLike.output?.payload?.error,
+      errorLike.output?.statusCode,
+      errorLike.stack
+    ]
+      .filter(Boolean)
+      .join(' | ');
+  };
+
+  const isPreKeyIssue = (errorLike) => PREKEY_SIGNATURE.test(toErrorText(errorLike));
+
+  const scheduleReconnect = ({ reason, context = {}, force = false }) => {
+    const now = Date.now();
+    const exponent = Math.max(0, reconnectState.retryCount - 1);
+    const delay = force
+      ? BASE_RECONNECT_DELAY_MS
+      : Math.min(MAX_RECONNECT_DELAY_MS, BASE_RECONNECT_DELAY_MS * (2 ** exponent));
+    const executeAt = Math.max(now + delay, reconnectState.nextAllowedAt);
+    const waitMs = Math.max(0, executeAt - now);
+
+    if (reconnectState.timer) {
+      logger.warn(
+        {
+          ...context,
+          retryCount: reconnectState.retryCount,
+          recoveryAction: 'reconnect-already-scheduled',
+          waitMs,
+          reason
+        },
+        'Skipping duplicate reconnect schedule'
+      );
+      return;
+    }
+
+    reconnectState.timer = setTimeout(() => {
+      reconnectState.timer = null;
+      startWhatsAppClient().catch((err) => {
+        logger.error(
+          { err, retryCount: reconnectState.retryCount, recoveryAction: 'reconnect-failed' },
+          'Reconnect failed'
+        );
+      });
+    }, waitMs);
+
+    logger.warn(
+      {
+        ...context,
+        retryCount: reconnectState.retryCount,
+        recoveryAction: 'scheduled-reconnect',
+        waitMs,
+        reason
+      },
+      'Reconnect scheduled'
+    );
+  };
+
+  const runPreKeyRecovery = async ({ error, key, source }) => {
+    const context = getMessageContext(key);
+    const sessionKey = `${context.remoteJid}:${context.participant}`;
+    const now = Date.now();
+    const previous = preKeyThrottleBySession.get(sessionKey);
+    const withinWindow = previous && now - previous.windowStart < PREKEY_THROTTLE_WINDOW_MS;
+    const retryCount = withinWindow ? previous.retryCount + 1 : 1;
+
+    preKeyThrottleBySession.set(sessionKey, {
+      retryCount,
+      windowStart: withinWindow ? previous.windowStart : now,
+      lastAt: now
+    });
+
+    if (retryCount > PREKEY_THROTTLE_LIMIT) {
+      logger.warn(
+        {
+          ...context,
+          retryCount,
+          recoveryAction: 'throttled-prekey-recovery',
+          source,
+          errorText: toErrorText(error)
+        },
+        'PreKey recovery throttled to prevent reconnect loop'
+      );
+      return;
+    }
+
+    reconnectState.retryCount += 1;
+    reconnectState.nextAllowedAt = now + BASE_RECONNECT_DELAY_MS;
+
+    try {
+      await saveCreds();
+      logger.warn(
+        {
+          ...context,
+          retryCount,
+          recoveryAction: 'persist-creds-and-reconnect',
+          source,
+          errorText: toErrorText(error)
+        },
+        'Detected PreKey drift, persisted creds before reconnect'
+      );
+    } catch (saveError) {
+      logger.error(
+        {
+          ...context,
+          retryCount,
+          recoveryAction: 'persist-creds-failed-reconnect',
+          source,
+          err: saveError
+        },
+        'Failed to persist creds during PreKey recovery'
+      );
+    }
+
+    scheduleReconnect({ reason: `${source}-prekey-remediation`, context });
+  };
+
   sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
     if (qr && env.WHATSAPP_SEND_QR_TO_TERMINAL) {
       qrcode.generate(qr, { small: true });
@@ -57,17 +196,41 @@ async function startWhatsAppClient() {
     }
 
     if (connection === 'open') {
+      reconnectState.retryCount = 0;
+      reconnectState.nextAllowedAt = 0;
       logger.info('WhatsApp connected');
     }
 
     if (connection === 'close') {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-      logger.warn({ statusCode, shouldReconnect }, 'WhatsApp disconnected');
+      logger.warn({ statusCode, shouldReconnect, retryCount: reconnectState.retryCount }, 'WhatsApp disconnected');
+
+      if (isPreKeyIssue(lastDisconnect?.error)) {
+        runPreKeyRecovery({ error: lastDisconnect.error, key: {}, source: 'connection.update' }).catch((err) => {
+          logger.error({ err, recoveryAction: 'prekey-recovery-failed' }, 'PreKey recovery handler failed');
+        });
+        return;
+      }
 
       if (shouldReconnect) {
-        startWhatsAppClient().catch((err) => logger.error(err, 'Reconnect failed'));
+        reconnectState.retryCount += 1;
+        scheduleReconnect({ reason: 'connection-close' });
       }
+    }
+  });
+
+  sock.ev.on('messages.media-update', (updates) => {
+    for (const update of updates || []) {
+      if (!isPreKeyIssue(update?.error)) continue;
+
+      runPreKeyRecovery({
+        error: update.error,
+        key: update.key,
+        source: 'messages.media-update'
+      }).catch((err) => {
+        logger.error({ err, recoveryAction: 'prekey-media-recovery-failed' }, 'PreKey media recovery failed');
+      });
     }
   });
 
@@ -148,76 +311,77 @@ async function startWhatsAppClient() {
     const pendingKey = getPendingKey(incoming);
     const pendingRequest = pendingExifRequests.get(pendingKey);
 
-    if (pendingRequest && /^ya$/i.test(normalizedText)) {
-      pendingExifRequests.delete(pendingKey);
-      await sock.sendMessage(
-        remoteJid,
-        { text: '⏳ Permintaan diproses. Sistem sedang mengekstrak metadata EXIF gambar Anda.' },
-        { quoted: incoming }
-      );
-
-      try {
-        await processPendingExif(remoteJid, incoming, pendingRequest);
-      } catch (error) {
-        logger.error({ err: error }, 'Gagal memproses EXIF');
+    try {
+      if (pendingRequest && /^ya$/i.test(normalizedText)) {
+        pendingExifRequests.delete(pendingKey);
         await sock.sendMessage(
           remoteJid,
-          {
-            text: [
-              '❌ *Analisis Metadata Gambar*',
-              'Proses EXIF gagal dijalankan karena EXIF tool belum terpasang atau belum dikonfigurasi.',
-              `Detail: ${error?.message || 'Terjadi kesalahan tidak terduga.'}`
-            ].join('\n')
-          },
+          { text: '⏳ Permintaan diproses. Sistem sedang mengekstrak metadata EXIF gambar Anda.' },
           { quoted: incoming }
         );
+
+        try {
+          await processPendingExif(remoteJid, incoming, pendingRequest);
+        } catch (error) {
+          logger.error({ err: error }, 'Gagal memproses EXIF');
+          await sock.sendMessage(
+            remoteJid,
+            {
+              text: [
+                '❌ *Analisis Metadata Gambar*',
+                'Proses EXIF gagal dijalankan karena EXIF tool belum terpasang atau belum dikonfigurasi.',
+                `Detail: ${error?.message || 'Terjadi kesalahan tidak terduga.'}`
+              ].join('\n')
+            },
+            { quoted: incoming }
+          );
+        }
+        return;
       }
-      return;
-    }
 
-    if (pendingRequest && /^tidak$/i.test(normalizedText)) {
-      pendingExifRequests.delete(pendingKey);
-      await sock.sendMessage(
-        remoteJid,
-        { text: 'Permintaan pemrosesan metadata dibatalkan sesuai instruksi Anda.' },
-        { quoted: incoming }
-      );
-      return;
-    }
-
-    const sherlockPrefix = `${env.BOT_PREFIX}sherlock`;
-    const holehePrefix = `${env.BOT_PREFIX}holehe`;
-    const exifPrefix = `${env.BOT_PREFIX}exif`;
-
-    if (incoming.message?.imageMessage) {
-      await askExifConfirmation(remoteJid, incoming, incoming);
-      return;
-    }
-
-    if (!normalizedText) return;
-
-    if (normalizedText.toLowerCase().startsWith(exifPrefix.toLowerCase())) {
-      const quotedImageSource = getQuotedImageSource(incoming);
-      if (!quotedImageSource) {
+      if (pendingRequest && /^tidak$/i.test(normalizedText)) {
+        pendingExifRequests.delete(pendingKey);
         await sock.sendMessage(
           remoteJid,
-          {
-            text: [
-              'Untuk memproses EXIF, silakan kirim gambar langsung atau reply gambar dengan perintah *!exif*.'
-            ].join('\n')
-          },
+          { text: 'Permintaan pemrosesan metadata dibatalkan sesuai instruksi Anda.' },
           { quoted: incoming }
         );
         return;
       }
 
-      await askExifConfirmation(remoteJid, incoming, quotedImageSource);
-      return;
-    }
+    const sherlockPrefix = `${env.BOT_PREFIX}sherlock`;
+    const holehePrefix = `${env.BOT_PREFIX}holehe`;
+    const exifPrefix = `${env.BOT_PREFIX}exif`;
 
-    if (normalizedText.toLowerCase().startsWith(sherlockPrefix.toLowerCase())) {
-      const argsText = normalizedText.slice(sherlockPrefix.length).trim();
-      const username = argsText || '-';
+      if (incoming.message?.imageMessage) {
+        await askExifConfirmation(remoteJid, incoming, incoming);
+        return;
+      }
+
+      if (!normalizedText) return;
+
+      if (normalizedText.toLowerCase().startsWith(exifPrefix.toLowerCase())) {
+        const quotedImageSource = getQuotedImageSource(incoming);
+        if (!quotedImageSource) {
+          await sock.sendMessage(
+            remoteJid,
+            {
+              text: [
+                'Untuk memproses EXIF, silakan kirim gambar langsung atau reply gambar dengan perintah *!exif*.'
+              ].join('\n')
+            },
+            { quoted: incoming }
+          );
+          return;
+        }
+
+        await askExifConfirmation(remoteJid, incoming, quotedImageSource);
+        return;
+      }
+
+      if (normalizedText.toLowerCase().startsWith(sherlockPrefix.toLowerCase())) {
+        const argsText = normalizedText.slice(sherlockPrefix.length).trim();
+        const username = argsText || '-';
 
       await sock.sendMessage(
         remoteJid,
@@ -242,11 +406,11 @@ async function startWhatsAppClient() {
         },
         { quoted: incoming }
       );
-    }
+      }
 
-    if (normalizedText.toLowerCase().startsWith(holehePrefix.toLowerCase())) {
-      const argsText = normalizedText.slice(holehePrefix.length).trim();
-      const email = argsText || '-';
+      if (normalizedText.toLowerCase().startsWith(holehePrefix.toLowerCase())) {
+        const argsText = normalizedText.slice(holehePrefix.length).trim();
+        const email = argsText || '-';
 
       await sock.sendMessage(
         remoteJid,
@@ -271,12 +435,32 @@ async function startWhatsAppClient() {
         },
         { quoted: incoming }
       );
+      }
+
+      const response = await handleCommand(text);
+      if (!response) return;
+
+      await sock.sendMessage(remoteJid, { text: response }, { quoted: incoming });
+    } catch (error) {
+      if (isPreKeyIssue(error)) {
+        await runPreKeyRecovery({
+          error,
+          key: incoming.key,
+          source: 'messages.upsert'
+        });
+        return;
+      }
+
+      logger.error(
+        {
+          err: error,
+          remoteJid,
+          id: incoming.key?.id || '-',
+          recoveryAction: 'none'
+        },
+        'Unhandled message processing error'
+      );
     }
-
-    const response = await handleCommand(text);
-    if (!response) return;
-
-    await sock.sendMessage(remoteJid, { text: response }, { quoted: incoming });
   });
 
   return sock;
