@@ -88,3 +88,40 @@ pm2 startup
 - Jangan pakai username dari user tanpa validasi (sudah divalidasi di service).
 - Akses command tidak dibatasi berdasarkan JID owner (semua chat yang masuk bisa diproses command).
 - Simpan folder `session/` dengan permission ketat.
+
+## 8) Runbook insiden WhatsApp session/key drift
+
+Jika PM2 log menunjukkan error dekripsi/session seperti `PreKeyError` atau `Invalid PreKey ID`, gunakan urutan mitigasi berikut.
+
+1. **Verifikasi gejala di PM2 log**
+   - Cari field terstruktur berikut pada log: `remoteJid`, `id`, `retryCount`, `recoveryAction`.
+   - Jika `recoveryAction=persist-creds-and-reconnect`, sistem sudah mencoba pemulihan terkendali (persist creds + reconnect bertahap).
+   - Jika `recoveryAction=throttled-prekey-recovery`, artinya satu chat/session sudah melewati ambang retry dan reconnect ditahan untuk mencegah loop.
+
+2. **Tunggu auto-recovery terlebih dahulu**
+   - Bot sudah menerapkan backoff reconnect dan throttle per chat/session.
+   - Jangan langsung restart berulang kali karena bisa memperparah drift key.
+
+3. **Tindakan operator (jika tetap gagal setelah beberapa menit)**
+   - Lakukan restart terkontrol service PM2:
+
+   ```bash
+   pm2 restart ecosystem.config.js --only cicero-sherlock-wa-bot
+   ```
+
+4. **Last resort: rotasi/hapus session store (`SESSION_DIR`)**
+   - Gunakan langkah ini **hanya jika error dekripsi persisten** dan auto-recovery + restart terkontrol gagal.
+   - Backup dulu isi session agar bisa dianalisis:
+
+   ```bash
+   cp -a "$SESSION_DIR" "${SESSION_DIR}_backup_$(date +%Y%m%d_%H%M%S)"
+   ```
+
+   - Hapus session store lalu jalankan ulang service:
+
+   ```bash
+   rm -rf "$SESSION_DIR"
+   pm2 restart ecosystem.config.js --only cicero-sherlock-wa-bot
+   ```
+
+   - Scan QR ulang pada WhatsApp Linked Devices.
