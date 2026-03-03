@@ -6,11 +6,24 @@ const { env } = require('../config/env');
 
 function pick(data, keys) {
   for (const key of keys) {
-    if (data[key] !== undefined && data[key] !== null && data[key] !== '') {
-      return data[key];
+    const value = normalizeValue(data[key]);
+    if (value !== null) {
+      return value;
     }
   }
   return null;
+}
+
+function normalizeValue(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === '-' || /^(null|undefined)$/i.test(trimmed)) {
+      return null;
+    }
+    return trimmed;
+  }
+  return value;
 }
 
 function toPrintable(value) {
@@ -39,12 +52,34 @@ async function writeTempImage(buffer, mimeType) {
 async function runExifTool(filePath) {
   const args = ['-j', '-n', filePath];
 
+  // eslint-disable-next-line no-console
+  console.info('[exif] memulai eksekusi exiftool', {
+    filePath,
+    cmd: env.EXIFTOOL_CMD,
+    args,
+    timeoutMs: env.EXIFTOOL_TIMEOUT_MS
+  });
+
   const output = await new Promise((resolve, reject) => {
     execFile(env.EXIFTOOL_CMD, args, { timeout: env.EXIFTOOL_TIMEOUT_MS }, (error, stdout, stderr) => {
       if (error) {
+        // eslint-disable-next-line no-console
+        console.error('[exif] eksekusi exiftool gagal', {
+          filePath,
+          message: error.message,
+          stderr: (stderr || '').trim(),
+          stdout: (stdout || '').trim()
+        });
         reject(new Error((stderr || stdout || error.message || 'ExifTool gagal dijalankan').trim()));
         return;
       }
+
+      // eslint-disable-next-line no-console
+      console.info('[exif] exiftool selesai', {
+        filePath,
+        stdoutChars: (stdout || '').length,
+        stderrChars: (stderr || '').length
+      });
       resolve(stdout || '[]');
     });
   });
@@ -59,22 +94,39 @@ async function runExifTool(filePath) {
 
 function summarizeExif(data) {
   const createDate = pick(data, ['DateTimeOriginal', 'CreateDate', 'ModifyDate']);
+  const fallbackDate = pick(data, ['DateCreated', 'CreationDate', 'MediaCreateDate', 'TrackCreateDate', 'FileModifyDate']);
   const device = [pick(data, ['Make']), pick(data, ['Model'])].filter(Boolean).join(' ');
   const software = pick(data, ['Software', 'ProcessingSoftware', 'CreatorTool', 'HistorySoftwareAgent']);
   const lat = pick(data, ['GPSLatitude']);
   const lon = pick(data, ['GPSLongitude']);
+  const gpsPosition = pick(data, ['GPSPosition']);
   const altitude = pick(data, ['GPSAltitude']);
   const edited = Boolean(software);
 
+  const location = lat !== null && lon !== null ? `${lat}, ${lon}` : toPrintable(gpsPosition);
+  const effectiveDate = createDate || fallbackDate;
+
+  if (!effectiveDate && !device && !software && !gpsPosition && lat === null && lon === null && altitude === null) {
+    // eslint-disable-next-line no-console
+    console.warn('[exif] metadata inti kosong', {
+      keysFound: Object.keys(data || {}).length,
+      sourceFile: data.SourceFile || '-'
+    });
+  }
+
   const lines = [
     '✅ *Ringkasan Metadata Gambar*',
-    `• Tanggal metadata: ${toPrintable(createDate)}`,
+    `• Tanggal metadata: ${toPrintable(effectiveDate)}`,
     `• Perangkat: ${toPrintable(device)}`,
-    `• Lokasi GPS: ${lat !== null && lon !== null ? `${lat}, ${lon}` : '-'}`,
+    `• Lokasi GPS: ${location}`,
     `• Ketinggian GPS: ${toPrintable(altitude)}`,
     `• Software/Edit: ${toPrintable(software)}`,
     `• Indikasi pernah diedit: ${edited ? 'Ya' : 'Tidak terdeteksi'}`
   ];
+
+  if (location === '-' && !effectiveDate && !device && !software) {
+    lines.push('• Catatan: Metadata kemungkinan sudah terhapus karena kompresi WhatsApp. Coba kirim file sebagai *dokumen* agar metadata asli tetap terbaca.');
+  }
 
   return lines.join('\n');
 }
@@ -82,8 +134,18 @@ function summarizeExif(data) {
 async function processExifFromBuffer(buffer, mimeType) {
   let tempPath;
   try {
+    // eslint-disable-next-line no-console
+    console.info('[exif] menerima buffer untuk diproses', {
+      mimeType: mimeType || '-',
+      bytes: Buffer.isBuffer(buffer) ? buffer.length : 0
+    });
     tempPath = await writeTempImage(buffer, mimeType);
     const raw = await runExifTool(tempPath);
+    // eslint-disable-next-line no-console
+    console.info('[exif] parsing metadata selesai', {
+      keysFound: Object.keys(raw || {}).length,
+      sourceFile: raw?.SourceFile || '-'
+    });
     return {
       summary: summarizeExif(raw),
       raw
