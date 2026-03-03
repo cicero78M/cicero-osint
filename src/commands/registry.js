@@ -1,5 +1,6 @@
 const { runSherlock } = require('../services/sherlock');
 const { runHolehe } = require('../services/holehe');
+const { runMaigret } = require('../services/maigret');
 const { env } = require('../config/env');
 
 function getHelpMessage() {
@@ -10,6 +11,7 @@ function getHelpMessage() {
     `${env.BOT_PREFIX}ping`,
     `${env.BOT_PREFIX}sherlock <username>`,
     `${env.BOT_PREFIX}holehe <email>`,
+    `${env.BOT_PREFIX}maigret <username>`,
     `${env.BOT_PREFIX}help`
   ].join('\n');
 }
@@ -80,6 +82,36 @@ async function handleCommand(text) {
       return [
         '❌ *Informasi Proses Holehe*',
         `Target email: *${email || '-'}*`,
+        'Status: *Proses selesai dengan kegagalan*',
+        '',
+        'Silakan coba kembali. Jika kendala berulang, mohon hubungi operator untuk pemeriksaan log server.'
+      ].join('\n');
+    }
+  }
+
+  if (command === 'maigret') {
+    const username = rest.join(' ');
+    try {
+      const result = await runMaigret(username);
+      return [
+        `✅ Proses Maigret selesai untuk *${result.username}*`,
+        `📄 File output: ${result.outputFile}`,
+        '',
+        '*Ringkasan hasil eksekusi:*',
+        '```',
+        result.output || 'Tidak ada output.',
+        '```'
+      ].join('\n');
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Maigret command failed:', {
+        username,
+        error: error?.stack || error?.message || String(error)
+      });
+
+      return [
+        '❌ *Informasi Proses Maigret*',
+        `Target username: *${username || '-'}*`,
         'Status: *Proses selesai dengan kegagalan*',
         '',
         'Silakan coba kembali. Jika kendala berulang, mohon hubungi operator untuk pemeriksaan log server.'
