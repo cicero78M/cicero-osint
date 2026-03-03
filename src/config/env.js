@@ -15,8 +15,7 @@ const schema = z.object({
   WHATSAPP_SEND_QR_TO_TERMINAL: z
     .string()
     .default('true')
-    .transform((v) => v === 'true'),
-  WHATSAPP_OWNER_JID: z.string().optional()
+    .transform((v) => v === 'true')
 });
 
 const env = schema.parse(process.env);
