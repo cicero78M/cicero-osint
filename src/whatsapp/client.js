@@ -1,18 +1,22 @@
 const fs = require('fs/promises');
-const makeWASocket = require('@whiskeysockets/baileys').default;
-const {
-  DisconnectReason,
-  useMultiFileAuthState,
-  fetchLatestBaileysVersion,
-  makeInMemoryStore
-} = require('@whiskeysockets/baileys');
 const P = require('pino');
 const qrcode = require('qrcode-terminal');
 const { env } = require('../config/env');
 const { handleCommand } = require('../commands/registry');
 
 const logger = P({ level: 'info' });
-const store = makeInMemoryStore({ logger: P({ level: 'silent' }) });
+
+let baileys;
+
+async function loadBaileys() {
+  if (!baileys) {
+    const module = await import('@whiskeysockets/baileys');
+    baileys = module.default ? { ...module, default: module.default } : module;
+  }
+
+
+  return baileys;
+}
 
 async function ensureSessionDir() {
   await fs.mkdir(env.SESSION_DIR, { recursive: true });
@@ -20,6 +24,13 @@ async function ensureSessionDir() {
 
 async function startWhatsAppClient() {
   await ensureSessionDir();
+
+  const {
+    default: makeWASocket,
+    DisconnectReason,
+    useMultiFileAuthState,
+    fetchLatestBaileysVersion
+  } = await loadBaileys();
 
   const { state, saveCreds } = await useMultiFileAuthState(env.SESSION_DIR);
   const { version } = await fetchLatestBaileysVersion();
@@ -33,7 +44,6 @@ async function startWhatsAppClient() {
     syncFullHistory: false
   });
 
-  store.bind(sock.ev);
 
   sock.ev.on('creds.update', saveCreds);
 
