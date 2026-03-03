@@ -5,6 +5,10 @@ if [[ ! -d ".venv" ]]; then
   python3 -m venv .venv
 fi
 
+if [[ ! -d ".venv-theharvester" ]]; then
+  python3 -m venv .venv-theharvester
+fi
+
 source .venv/bin/activate
 python3 -m pip install --upgrade pip
 python3 -m pip install sherlock-project
@@ -16,7 +20,7 @@ python3 -m pip install maigret
 # sehingga import Maigret gagal (contoh: aiohttp.abc.ResolveResult tidak ada di aiohttp lama).
 python3 -m pip install --upgrade \
   "aiohttp>=3.12.14,<4.0.0" \
-  "aiohttp-socks>=0.10.1" \
+  "aiohttp-socks>=0.10.1,<0.11.0" \
   "async-timeout>=5.0.1,<6.0.0" \
   "certifi>=2025.6.15,<2026.0.0" \
   "lxml>=5.4.0,<6.0.0" \
@@ -38,7 +42,24 @@ else
   fi
 fi
 
-python3 -m pip install "git+${THEHARVESTER_SOURCE_REPO}@${THEHARVESTER_VERSION}"
+./.venv-theharvester/bin/python3 -m pip install --upgrade pip
+./.venv-theharvester/bin/python3 -m pip install "git+${THEHARVESTER_SOURCE_REPO}@${THEHARVESTER_VERSION}"
+
+cat > ./.venv/bin/theHarvester <<'WRAPPER'
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+THEHARVESTER_BIN="${SCRIPT_DIR}/../../.venv-theharvester/bin/theHarvester"
+
+if [[ ! -x "${THEHARVESTER_BIN}" ]]; then
+  echo "theHarvester binary tidak ditemukan di ${THEHARVESTER_BIN}" >&2
+  exit 1
+fi
+
+exec "${THEHARVESTER_BIN}" "$@"
+WRAPPER
+chmod +x ./.venv/bin/theHarvester
 
 INFOGA_SOURCE_DEFAULT="https://github.com/robertswin/Infoga.git"
 INFOGA_ARCHIVE_FALLBACK_DEFAULT="https://codeload.github.com/robertswin/Infoga/zip/refs/heads/master"
