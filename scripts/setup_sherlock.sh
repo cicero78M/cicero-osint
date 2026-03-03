@@ -13,8 +13,19 @@ python3 -m pip install maigret
 
 THEHARVESTER_SOURCE_REPO_DEFAULT="https://github.com/laramies/theHarvester.git"
 THEHARVESTER_VERSION_DEFAULT="4.9.2"
+THEHARVESTER_LEGACY_VERSION_DEFAULT="4.6.0"
 THEHARVESTER_SOURCE_REPO="${THEHARVESTER_SOURCE_REPO:-$THEHARVESTER_SOURCE_REPO_DEFAULT}"
-THEHARVESTER_VERSION="${THEHARVESTER_VERSION:-$THEHARVESTER_VERSION_DEFAULT}"
+
+if [[ -n "${THEHARVESTER_VERSION:-}" ]]; then
+  THEHARVESTER_VERSION="${THEHARVESTER_VERSION}"
+else
+  if python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)'; then
+    THEHARVESTER_VERSION="${THEHARVESTER_VERSION_DEFAULT}"
+  else
+    THEHARVESTER_VERSION="${THEHARVESTER_LEGACY_VERSION_DEFAULT}"
+    echo "Python $(python3 -V 2>&1) terdeteksi < 3.12. Menggunakan theHarvester ${THEHARVESTER_VERSION} agar kompatibel." >&2
+  fi
+fi
 
 python3 -m pip install "git+${THEHARVESTER_SOURCE_REPO}@${THEHARVESTER_VERSION}"
 
