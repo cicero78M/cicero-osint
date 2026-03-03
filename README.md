@@ -94,6 +94,9 @@ SHERLOCK_CMD=./.venv/bin/sherlock
 HOLEHE_CMD=./.venv/bin/holehe
 MAIGRET_CMD=./.venv/bin/maigret
 THEHARVESTER_CMD=./.venv/bin/theHarvester
+THEHARVESTER_SOURCES=crtsh,bing,duckduckgo,yahoo
+THEHARVESTER_LIMIT=500
+THEHARVESTER_DNS_BRUTE=true
 INFOGA_CMD=./.venv/bin/infoga
 INFOGA_OPTIONAL=true
 ```
@@ -135,6 +138,31 @@ Contoh:
 !maigret johndoe
 !theharvester example.com
 !infoga target@email.com
+```
+
+### Tuning theHarvester (default lebih tajam)
+
+Service `!theharvester` sekarang otomatis menjalankan parameter berikut agar hasil subdomain lebih kaya:
+
+- `-b crtsh,bing,duckduckgo,yahoo`
+- `-l 500`
+- `-c` (DNS brute)
+- `-f <report_prefix>` (theHarvester menulis report bawaan `.json/.xml/.html` sesuai versi)
+
+Jika ingin override tanpa ubah kode, pakai environment variable:
+
+```env
+THEHARVESTER_SOURCES=crtsh,bing,duckduckgo,yahoo
+THEHARVESTER_LIMIT=500
+THEHARVESTER_DNS_BRUTE=true
+```
+
+Contoh manual run di server:
+
+```bash
+./.venv/bin/theHarvester -d papiqo.com -b crtsh -l 500
+./.venv/bin/theHarvester -d papiqo.com -b crtsh,bing,duckduckgo,yahoo -l 500 -f ./runtime/theharvester/papiqo_com-latest
+./.venv/bin/theHarvester -d papiqo.com -b crtsh -l 500 -c
 ```
 
 ## 6) Jalankan via PM2 (Production)

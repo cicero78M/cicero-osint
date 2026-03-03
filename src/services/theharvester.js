@@ -32,9 +32,24 @@ async function runTheHarvester(rawDomain) {
   await fs.mkdir(reportDir, { recursive: true });
 
   const outputFile = path.join(reportDir, `theharvester-${domain.replace(/\./g, '_')}-${ts}.txt`);
+  const reportPrefix = path.join(reportDir, 'harvester');
   const { bin, args } = splitCmd(env.THEHARVESTER_CMD);
   const resolvedBin = path.isAbsolute(bin) ? bin : path.resolve(process.cwd(), bin);
-  const finalArgs = [...args, '-d', domain];
+  const finalArgs = [
+    ...args,
+    '-d',
+    domain,
+    '-b',
+    env.THEHARVESTER_SOURCES,
+    '-l',
+    String(env.THEHARVESTER_LIMIT)
+  ];
+
+  if (env.THEHARVESTER_DNS_BRUTE) {
+    finalArgs.push('-c');
+  }
+
+  finalArgs.push('-f', reportPrefix);
 
   // eslint-disable-next-line no-console
   console.info('[theharvester] memulai eksekusi', {
@@ -42,7 +57,8 @@ async function runTheHarvester(rawDomain) {
     bin: resolvedBin,
     args: finalArgs,
     reportDir,
-    outputFile
+    outputFile,
+    reportPrefix
   });
 
   const output = await new Promise((resolve, reject) => {
@@ -85,7 +101,8 @@ async function runTheHarvester(rawDomain) {
     domain,
     outputChars: output.length,
     reportDir,
-    outputFile
+    outputFile,
+    reportPrefix
   });
 
   const truncated = output.slice(0, env.THEHARVESTER_MAX_OUTPUT_CHARS);
@@ -96,7 +113,8 @@ async function runTheHarvester(rawDomain) {
     domain,
     output: truncated + suffix,
     outputFile,
-    reportDir
+    reportDir,
+    reportPrefix
   };
 }
 
