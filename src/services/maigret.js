@@ -18,13 +18,43 @@ function extractPositiveFindings(rawOutput) {
     .replace(/\u001b\[[0-9;]*[A-Za-z]/g, '')
     .replace(/\r/g, '\n');
 
+  const allowedHosts = [
+    'instagram.com',
+    'tiktok.com',
+    'facebook.com',
+    'youtube.com',
+    'youtu.be',
+    'x.com',
+    'twitter.com',
+    'linkedin.com',
+    'twitch.tv',
+    'discord.com',
+    'discord.gg'
+  ];
+
+  function isAllowedHost(urlString) {
+    try {
+      const host = new URL(urlString).hostname.toLowerCase();
+      return allowedHosts.some((allowedHost) => host === allowedHost || host.endsWith(`.${allowedHost}`));
+    } catch (_error) {
+      return false;
+    }
+  }
+
   const positiveLines = normalized
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => /^\[\+\]\s+/.test(line));
+    .filter((line) => {
+      if (!/^\[\+\]\s+/.test(line)) return false;
+
+      const urlMatch = line.match(/https?:\/\/\S+/i);
+      if (!urlMatch) return false;
+
+      return isAllowedHost(urlMatch[0]);
+    });
 
   if (!positiveLines.length) {
-    return 'Tidak ditemukan akun tertaut ([+]).';
+    return 'Tidak ditemukan akun tertaut ([+]) pada platform sosial media yang diizinkan.';
   }
 
   return positiveLines.join('\n');
