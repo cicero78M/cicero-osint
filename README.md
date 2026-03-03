@@ -1,6 +1,6 @@
 # CICERO Sherlock WhatsApp Bot (Baileys)
 
-Project ini menjalankan perintah Sherlock, Holehe, dan Maigret melalui WhatsApp menggunakan Baileys.
+Project ini menjalankan perintah Sherlock, Holehe, Maigret, theHarvester, dan Infoga melalui WhatsApp menggunakan Baileys.
 
 ## 1) Prasyarat Server (Ubuntu)
 
@@ -33,12 +33,14 @@ cp .env.example .env
 ./scripts/setup_sherlock.sh
 ```
 
-Lalu ubah `.env` agar command Sherlock, Holehe, dan Maigret memakai virtualenv:
+Lalu ubah `.env` agar command Sherlock, Holehe, Maigret, theHarvester, dan Infoga memakai virtualenv (default binary):
 
 ```env
 SHERLOCK_CMD=./.venv/bin/sherlock
 HOLEHE_CMD=./.venv/bin/holehe
 MAIGRET_CMD=./.venv/bin/maigret
+THEHARVESTER_CMD=./.venv/bin/theHarvester
+INFOGA_CMD=./.venv/bin/infoga
 ```
 
 Nilai di atas harus sama dengan output `Final command (.env)` dari `./scripts/setup_sherlock.sh` agar tidak terjadi instruksi campur untuk operator.
