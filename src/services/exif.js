@@ -29,6 +29,7 @@ function normalizeValue(value) {
 function toPrintable(value) {
   if (value === null || value === undefined || value === '') return '-';
   if (Array.isArray(value)) return value.join(', ');
+  if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
 }
 
@@ -36,8 +37,10 @@ function getImageExtension(mimeType) {
   const normalized = String(mimeType || '').toLowerCase();
   if (normalized.includes('png')) return 'png';
   if (normalized.includes('webp')) return 'webp';
-  if (normalized.includes('heic')) return 'heic';
+  if (normalized.includes('heic') || normalized.includes('heif')) return 'heic';
   if (normalized.includes('gif')) return 'gif';
+  if (normalized.includes('tiff') || normalized.includes('tif')) return 'tif';
+  if (normalized.includes('bmp')) return 'bmp';
   return 'jpg';
 }
 
@@ -50,7 +53,7 @@ async function writeTempImage(buffer, mimeType) {
 }
 
 async function runExifTool(filePath) {
-  const args = ['-j', '-n', filePath];
+  const args = ['-j', '-n', '-a', '-u', '-ee', filePath];
 
   // eslint-disable-next-line no-console
   console.info('[exif] memulai eksekusi exiftool', {
@@ -131,6 +134,24 @@ function summarizeExif(data) {
   return lines.join('\n');
 }
 
+function formatRawMetadata(data) {
+  const sortedKeys = Object.keys(data || {})
+    .filter((key) => key !== 'SourceFile')
+    .sort((a, b) => a.localeCompare(b));
+
+  const lines = ['📄 *Semua metadata yang dibaca exiftool*'];
+
+  for (const key of sortedKeys) {
+    lines.push(`• ${key}: ${toPrintable(data[key])}`);
+  }
+
+  if (sortedKeys.length === 0) {
+    lines.push('• Tidak ada metadata selain informasi SourceFile.');
+  }
+
+  return lines.join('\n');
+}
+
 async function processExifFromBuffer(buffer, mimeType) {
   let tempPath;
   try {
@@ -148,6 +169,7 @@ async function processExifFromBuffer(buffer, mimeType) {
     });
     return {
       summary: summarizeExif(raw),
+      fullMetadata: formatRawMetadata(raw),
       raw
     };
   } finally {
@@ -160,5 +182,6 @@ async function processExifFromBuffer(buffer, mimeType) {
 module.exports = {
   processExifFromBuffer,
   getImageExtension,
-  summarizeExif
+  summarizeExif,
+  formatRawMetadata
 };
