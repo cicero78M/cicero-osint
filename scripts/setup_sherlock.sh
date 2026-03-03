@@ -117,6 +117,73 @@ MAIGRET_CMD="./.venv/bin/maigret"
 THEHARVESTER_CMD="./.venv/bin/theHarvester"
 INFOGA_CMD="./.venv/bin/infoga"
 VERIFICATION_STATUS="PASS"
+SETUP_LOG_FILE="./.venv/setup_sherlock.log"
+
+mkdir -p "$(dirname "${SETUP_LOG_FILE}")"
+: > "${SETUP_LOG_FILE}"
+
+detect_failure_reason() {
+  local output="$1"
+
+  if [[ "${output}" == *"No such file or directory"* ]] || [[ "${output}" == *"not found"* ]]; then
+    echo "executable tidak ditemukan"
+    return
+  fi
+
+  if [[ "${output}" == *"ModuleNotFoundError"* ]] || [[ "${output}" == *"ImportError"* ]]; then
+    echo "module import error"
+    return
+  fi
+
+  if [[ "${output}" == *"command not found"* ]]; then
+    echo "dependency OS hilang"
+    return
+  fi
+
+  if [[ "${output}" == *"python2"* ]] && [[ "${output}" == *"tidak ditemukan"* ]]; then
+    echo "dependency OS hilang (python2/python2.7 tidak ditemukan)"
+    return
+  fi
+
+  echo "dependency sistem belum lengkap atau instalasi package gagal"
+}
+
+verify_tool_command() {
+  local tool_name="$1"
+  local env_key="$2"
+  local cmd_path="$3"
+  local help_arg="$4"
+  local result_file
+  local output
+  local reason
+
+  result_file="$(mktemp)"
+
+  if ! "${cmd_path}" "${help_arg}" >"${result_file}" 2>&1; then
+    VERIFICATION_STATUS="FAIL"
+    output="$(cat "${result_file}")"
+    reason="$(detect_failure_reason "${output}")"
+
+    {
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${tool_name} verification failed"
+      echo "Final command (.env): ${env_key}=${cmd_path}"
+      cat "${result_file}"
+      echo ""
+    } >> "${SETUP_LOG_FILE}"
+
+    echo "${tool_name} verification failed: ${reason}." >&2
+    echo "Final command (.env): ${env_key}=${cmd_path}" >&2
+    echo "Output cuplikan (${tool_name}):" >&2
+    sed -n '1,20p' "${result_file}" >&2
+    echo "Log lengkap verifikasi: ${SETUP_LOG_FILE}" >&2
+    echo "Verification status: ${VERIFICATION_STATUS}" >&2
+
+    rm -f "${result_file}"
+    exit 1
+  fi
+
+  rm -f "${result_file}"
+}
 
 if [[ ! -f "${THEHARVESTER_CMD}" || ! -x "${THEHARVESTER_CMD}" ]]; then
   VERIFICATION_STATUS="FAIL"
@@ -127,45 +194,11 @@ if [[ ! -f "${THEHARVESTER_CMD}" || ! -x "${THEHARVESTER_CMD}" ]]; then
   exit 1
 fi
 
-if ! ${SHERLOCK_CMD} --help >/dev/null 2>&1; then
-  VERIFICATION_STATUS="FAIL"
-  echo "Sherlock verification failed: dependency sistem belum lengkap atau instalasi Python package gagal." >&2
-  echo "Final command (.env): SHERLOCK_CMD=${SHERLOCK_CMD}" >&2
-  echo "Verification status: ${VERIFICATION_STATUS}" >&2
-  exit 1
-fi
-
-if ! ${HOLEHE_CMD} --help >/dev/null 2>&1; then
-  VERIFICATION_STATUS="FAIL"
-  echo "Holehe verification failed: dependency sistem belum lengkap atau instalasi Python package gagal." >&2
-  echo "Final command (.env): HOLEHE_CMD=${HOLEHE_CMD}" >&2
-  echo "Verification status: ${VERIFICATION_STATUS}" >&2
-  exit 1
-fi
-
-if ! ${MAIGRET_CMD} --help >/dev/null 2>&1; then
-  VERIFICATION_STATUS="FAIL"
-  echo "Maigret verification failed: dependency sistem belum lengkap atau instalasi Python package gagal." >&2
-  echo "Final command (.env): MAIGRET_CMD=${MAIGRET_CMD}" >&2
-  echo "Verification status: ${VERIFICATION_STATUS}" >&2
-  exit 1
-fi
-
-if ! ${THEHARVESTER_CMD} --help >/dev/null 2>&1; then
-  VERIFICATION_STATUS="FAIL"
-  echo "theHarvester verification failed: dependency sistem belum lengkap atau instalasi Python package gagal." >&2
-  echo "Final command (.env): THEHARVESTER_CMD=${THEHARVESTER_CMD}" >&2
-  echo "Verification status: ${VERIFICATION_STATUS}" >&2
-  exit 1
-fi
-
-if ! ${INFOGA_CMD} --help >/dev/null 2>&1; then
-  VERIFICATION_STATUS="FAIL"
-  echo "Infoga verification failed: source sudah terpasang, tetapi runtime Infoga (umumnya Python 2) belum siap." >&2
-  echo "Final command (.env): INFOGA_CMD=${INFOGA_CMD}" >&2
-  echo "Verification status: ${VERIFICATION_STATUS}" >&2
-  exit 1
-fi
+verify_tool_command "Sherlock" "SHERLOCK_CMD" "${SHERLOCK_CMD}" "--help"
+verify_tool_command "Holehe" "HOLEHE_CMD" "${HOLEHE_CMD}" "--help"
+verify_tool_command "Maigret" "MAIGRET_CMD" "${MAIGRET_CMD}" "--help"
+verify_tool_command "theHarvester" "THEHARVESTER_CMD" "${THEHARVESTER_CMD}" "--help"
+verify_tool_command "Infoga" "INFOGA_CMD" "${INFOGA_CMD}" "--help"
 
 echo "Sherlock, Holehe, Maigret, theHarvester, dan Infoga terpasang di virtualenv .venv"
 echo "Final command (.env): SHERLOCK_CMD=${SHERLOCK_CMD}"
