@@ -35,7 +35,7 @@ cp .env.example .env
 Lalu ubah `.env` agar command Sherlock memakai virtualenv:
 
 ```env
-SHERLOCK_CMD=./.venv/bin/python -m sherlock
+SHERLOCK_CMD=./.venv/bin/sherlock
 ```
 
 ## 4) Jalankan bot
