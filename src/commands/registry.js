@@ -1,4 +1,5 @@
 const { runSherlock } = require('../services/sherlock');
+const { runHolehe } = require('../services/holehe');
 const { env } = require('../config/env');
 
 function getHelpMessage() {
@@ -8,6 +9,7 @@ function getHelpMessage() {
     `Perintah:`,
     `${env.BOT_PREFIX}ping`,
     `${env.BOT_PREFIX}sherlock <username>`,
+    `${env.BOT_PREFIX}holehe <email>`,
     `${env.BOT_PREFIX}help`
   ].join('\n');
 }
@@ -48,6 +50,36 @@ async function handleCommand(text) {
       return [
         '❌ *Informasi Proses Sherlock*',
         `Target username: *${username || '-'}*`,
+        'Status: *Proses selesai dengan kegagalan*',
+        '',
+        'Silakan coba kembali. Jika kendala berulang, mohon hubungi operator untuk pemeriksaan log server.'
+      ].join('\n');
+    }
+  }
+
+  if (command === 'holehe') {
+    const email = rest.join(' ');
+    try {
+      const result = await runHolehe(email);
+      return [
+        `✅ Proses Holehe selesai untuk *${result.email}*`,
+        `📄 File output: ${result.outputFile}`,
+        '',
+        '*Ringkasan hasil eksekusi:*',
+        '```',
+        result.output || 'Tidak ada output.',
+        '```'
+      ].join('\n');
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Holehe command failed:', {
+        email,
+        error: error?.stack || error?.message || String(error)
+      });
+
+      return [
+        '❌ *Informasi Proses Holehe*',
+        `Target email: *${email || '-'}*`,
         'Status: *Proses selesai dengan kegagalan*',
         '',
         'Silakan coba kembali. Jika kendala berulang, mohon hubungi operator untuk pemeriksaan log server.'

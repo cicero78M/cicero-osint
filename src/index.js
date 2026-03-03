@@ -4,14 +4,14 @@ const { env } = require('./config/env');
 const { splitCmd } = require('./services/sherlock');
 const { startWhatsAppClient } = require('./whatsapp/client');
 
-async function verifySherlockCommand() {
-  const { bin, args } = splitCmd(env.SHERLOCK_CMD);
+async function verifyCommand(command, name) {
+  const { bin, args } = splitCmd(command);
 
   await new Promise((resolve, reject) => {
     execFile(bin, [...args, '--version'], { timeout: 10000 }, (error, stdout, stderr) => {
       if (error) {
         const details = `${stdout || ''}\n${stderr || ''}`.trim() || error.message;
-        reject(new Error(details));
+        reject(new Error(`${name}: ${details}`));
         return;
       }
 
@@ -22,13 +22,15 @@ async function verifySherlockCommand() {
 
 async function bootstrap() {
   await fs.mkdir(env.SHERLOCK_WORKDIR, { recursive: true });
+  await fs.mkdir(env.HOLEHE_WORKDIR, { recursive: true });
 
   try {
-    await verifySherlockCommand();
+    await verifyCommand(env.SHERLOCK_CMD, 'sherlock');
+    await verifyCommand(env.HOLEHE_CMD, 'holehe');
   } catch (error) {
     // eslint-disable-next-line no-console
-    console.error('Sherlock preflight gagal. Jalankan ./scripts/setup_sherlock.sh lalu restart service. Root cause:', error);
-    throw new Error('Sherlock command tidak siap. Jalankan ./scripts/setup_sherlock.sh lalu restart service.');
+    console.error('Preflight tool gagal. Jalankan setup dependencies lalu restart service. Root cause:', error);
+    throw new Error('Sherlock/Holehe command tidak siap. Jalankan setup dependencies lalu restart service.');
   }
 
   await startWhatsAppClient();

@@ -84,6 +84,7 @@ async function startWhatsAppClient() {
 
     const normalizedText = text.trim();
     const sherlockPrefix = `${env.BOT_PREFIX}sherlock`;
+    const holehePrefix = `${env.BOT_PREFIX}holehe`;
 
     if (normalizedText.toLowerCase().startsWith(sherlockPrefix.toLowerCase())) {
       const argsText = normalizedText.slice(sherlockPrefix.length).trim();
@@ -108,6 +109,35 @@ async function startWhatsAppClient() {
             '⏳ *Informasi Proses Sherlock*',
             `Target username: *${username}*`,
             'Status: *Sedang melakukan proses pencarian OSINT*'
+          ].join('\n')
+        },
+        { quoted: incoming }
+      );
+    }
+
+    if (normalizedText.toLowerCase().startsWith(holehePrefix.toLowerCase())) {
+      const argsText = normalizedText.slice(holehePrefix.length).trim();
+      const email = argsText || '-';
+
+      await sock.sendMessage(
+        remoteJid,
+        {
+          text: [
+            '🔔 *Informasi Proses Holehe*',
+            `Target email: *${email}*`,
+            'Status: *Memulai proses eksekusi di server*'
+          ].join('\n')
+        },
+        { quoted: incoming }
+      );
+
+      await sock.sendMessage(
+        remoteJid,
+        {
+          text: [
+            '⏳ *Informasi Proses Holehe*',
+            `Target email: *${email}*`,
+            'Status: *Sedang melakukan proses pencarian akun terkait email*'
           ].join('\n')
         },
         { quoted: incoming }

@@ -32,10 +32,11 @@ cp .env.example .env
 ./scripts/setup_sherlock.sh
 ```
 
-Lalu ubah `.env` agar command Sherlock memakai virtualenv:
+Lalu ubah `.env` agar command Sherlock dan Holehe memakai virtualenv:
 
 ```env
 SHERLOCK_CMD=./.venv/bin/sherlock
+HOLEHE_CMD=./.venv/bin/holehe
 ```
 
 Nilai di atas harus sama dengan output `Final command (.env)` dari `./scripts/setup_sherlock.sh` agar tidak terjadi instruksi campur untuk operator.
@@ -54,11 +55,13 @@ npm start
 - `!help`
 - `!ping`
 - `!sherlock <username>`
+- `!holehe <email>`
 
 Contoh:
 
 ```text
 !sherlock johndoe
+!holehe target@email.com
 ```
 
 ## 6) Jalankan via PM2 (Production)
