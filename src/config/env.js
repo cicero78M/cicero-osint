@@ -20,6 +20,10 @@ const schema = z.object({
   MAIGRET_WORKDIR: z.string().default('./runtime/maigret'),
   MAIGRET_TIMEOUT_MS: z.coerce.number().int().positive().default(180000),
   MAIGRET_MAX_OUTPUT_CHARS: z.coerce.number().int().positive().default(3500),
+  INSTALOADER_CMD: z.string().default('./.venv/bin/instaloader'),
+  INSTALOADER_WORKDIR: z.string().default('./runtime/instaloader'),
+  INSTALOADER_TIMEOUT_MS: z.coerce.number().int().positive().default(180000),
+  INSTALOADER_MAX_OUTPUT_CHARS: z.coerce.number().int().positive().default(3500),
   THEHARVESTER_CMD: z.string().default('./.venv/bin/theHarvester'),
   THEHARVESTER_WORKDIR: z.string().default('./runtime/theharvester'),
   THEHARVESTER_SOURCES: z.string().default('crtsh,bing,duckduckgo,yahoo'),
@@ -46,6 +50,7 @@ env.SESSION_DIR = resolveFromCwd(env.SESSION_DIR);
 env.SHERLOCK_WORKDIR = resolveFromCwd(env.SHERLOCK_WORKDIR);
 env.HOLEHE_WORKDIR = resolveFromCwd(env.HOLEHE_WORKDIR);
 env.MAIGRET_WORKDIR = resolveFromCwd(env.MAIGRET_WORKDIR);
+env.INSTALOADER_WORKDIR = resolveFromCwd(env.INSTALOADER_WORKDIR);
 env.THEHARVESTER_WORKDIR = resolveFromCwd(env.THEHARVESTER_WORKDIR);
 
 module.exports = { env };

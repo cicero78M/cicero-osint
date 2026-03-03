@@ -1,6 +1,7 @@
 const { runSherlock } = require('../services/sherlock');
 const { runHolehe } = require('../services/holehe');
 const { runMaigret } = require('../services/maigret');
+const { runInstaloader } = require('../services/instaloader');
 const { runTheHarvester } = require('../services/theharvester');
 const { env } = require('../config/env');
 
@@ -13,6 +14,7 @@ function getHelpMessage() {
     `${env.BOT_PREFIX}sherlock <username>`,
     `${env.BOT_PREFIX}holehe <email>`,
     `${env.BOT_PREFIX}maigret <username>`,
+    `${env.BOT_PREFIX}instaloader <username>`,
     `${env.BOT_PREFIX}theharvester <domain>`,
     `${env.BOT_PREFIX}exif (reply gambar)`,
     `${env.BOT_PREFIX}help`
@@ -114,6 +116,38 @@ async function handleCommand(text) {
 
       return [
         '❌ *Informasi Proses Maigret*',
+        `Target username: *${username || '-'}*`,
+        'Status: *Proses selesai dengan kegagalan*',
+        '',
+        'Silakan coba kembali. Jika kendala berulang, mohon hubungi operator untuk pemeriksaan log server.'
+      ].join('\n');
+    }
+  }
+
+
+  if (command === 'instaloader') {
+    const username = rest.join(' ');
+    try {
+      const result = await runInstaloader(username);
+      return [
+        `✅ Proses Instaloader selesai untuk *${result.username}*`,
+        `📁 Direktori hasil: ${result.reportDir}`,
+        `📄 File output: ${result.outputFile}`,
+        '',
+        '*Ringkasan hasil eksekusi:*',
+        '```',
+        result.output || 'Tidak ada output.',
+        '```'
+      ].join('\n');
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Instaloader command failed:', {
+        username,
+        error: error?.stack || error?.message || String(error)
+      });
+
+      return [
+        '❌ *Informasi Proses Instaloader*',
         `Target username: *${username || '-'}*`,
         'Status: *Proses selesai dengan kegagalan*',
         '',
