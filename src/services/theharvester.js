@@ -33,14 +33,21 @@ async function runTheHarvester(rawDomain) {
 
   const outputFile = path.join(reportDir, `theharvester-${domain.replace(/\./g, '_')}-${ts}.txt`);
   const { bin, args } = splitCmd(env.THEHARVESTER_CMD);
+  const resolvedBin = path.isAbsolute(bin) ? bin : path.resolve(process.cwd(), bin);
   const finalArgs = [...args, '-d', domain];
 
   // eslint-disable-next-line no-console
-  console.info('[theharvester] memulai eksekusi', { domain, bin, args: finalArgs, reportDir, outputFile });
+  console.info('[theharvester] memulai eksekusi', {
+    domain,
+    bin: resolvedBin,
+    args: finalArgs,
+    reportDir,
+    outputFile
+  });
 
   const output = await new Promise((resolve, reject) => {
     execFile(
-      bin,
+      resolvedBin,
       finalArgs,
       { timeout: env.THEHARVESTER_TIMEOUT_MS, cwd: reportDir },
       async (error, stdout, stderr) => {
