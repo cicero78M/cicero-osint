@@ -27,16 +27,13 @@ async function handleCommand(text) {
 
   if (command === 'sherlock') {
     const username = rest.join(' ');
-    const startText = `🔎 Menjalankan Sherlock untuk *${username}*...`;
-
     try {
       const result = await runSherlock(username);
       return [
-        startText,
+        `✅ Proses Sherlock selesai untuk *${result.username}*`,
+        `📁 Direktori hasil: ${result.reportDir}`,
         '',
-        `✅ Selesai: *${result.username}*`,
-        `📁 Output: ${result.reportDir}`,
-        '',
+        '*Ringkasan hasil eksekusi:*',
         '```',
         result.output || 'Tidak ada output.',
         '```'
@@ -49,9 +46,11 @@ async function handleCommand(text) {
       });
 
       return [
-        `❌ Sherlock gagal untuk *${username || '-'}*`,
+        '❌ *Informasi Proses Sherlock*',
+        `Target username: *${username || '-'}*`,
+        'Status: *Proses selesai dengan kegagalan*',
         '',
-        'Silakan coba lagi. Jika berulang, hubungi operator untuk cek log server.'
+        'Silakan coba kembali. Jika kendala berulang, mohon hubungi operator untuk pemeriksaan log server.'
       ].join('\n');
     }
   }
