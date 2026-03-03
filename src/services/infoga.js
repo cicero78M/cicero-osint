@@ -64,6 +64,17 @@ async function runInfoga(rawTarget) {
       }
 
       if (error) {
+        if (
+          text.includes('membutuhkan interpreter Python 2') ||
+          text.includes('python2/python2.7')
+        ) {
+          resolve({
+            text,
+            unavailable: true
+          });
+          return;
+        }
+
         // eslint-disable-next-line no-console
         console.error('[infoga] eksekusi gagal', {
           mode,
@@ -75,7 +86,10 @@ async function runInfoga(rawTarget) {
         return;
       }
 
-      resolve(text);
+      resolve({
+        text,
+        unavailable: false
+      });
     });
   });
 
@@ -83,16 +97,17 @@ async function runInfoga(rawTarget) {
   console.info('[infoga] eksekusi selesai', {
     mode,
     target,
-    outputChars: output.length,
+    outputChars: output.text.length,
     outputFile
   });
 
-  const truncated = output.slice(0, env.INFOGA_MAX_OUTPUT_CHARS);
-  const suffix = output.length > truncated.length ? '\n\n[output dipotong]' : '';
+  const truncated = output.text.slice(0, env.INFOGA_MAX_OUTPUT_CHARS);
+  const suffix = output.text.length > truncated.length ? '\n\n[output dipotong]' : '';
 
   return {
     mode,
     target,
+    unavailable: output.unavailable,
     output: truncated + suffix,
     outputFile
   };
