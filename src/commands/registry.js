@@ -42,12 +42,16 @@ async function handleCommand(text) {
         '```'
       ].join('\n');
     } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Sherlock command failed:', {
+        username,
+        error: error?.stack || error?.message || String(error)
+      });
+
       return [
         `❌ Sherlock gagal untuk *${username || '-'}*`,
         '',
-        '```',
-        error.message || String(error),
-        '```'
+        'Silakan coba lagi. Jika berulang, hubungi operator untuk cek log server.'
       ].join('\n');
     }
   }

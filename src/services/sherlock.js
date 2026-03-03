@@ -54,4 +54,4 @@ async function runSherlock(rawUsername) {
   };
 }
 
-module.exports = { runSherlock };
+module.exports = { runSherlock, splitCmd };
