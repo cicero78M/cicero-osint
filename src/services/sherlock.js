@@ -32,16 +32,32 @@ async function runSherlock(rawUsername) {
   const { bin, args } = splitCmd(env.SHERLOCK_CMD);
   const finalArgs = [...args, username, '--print-found', '--folderoutput', targetDir];
 
+  // eslint-disable-next-line no-console
+  console.info('[sherlock] memulai eksekusi', { username, bin, args: finalArgs, targetDir });
+
   const output = await new Promise((resolve, reject) => {
     execFile(bin, finalArgs, { timeout: env.SHERLOCK_TIMEOUT_MS }, (error, stdout, stderr) => {
       if (error) {
         const text = `${stdout || ''}\n${stderr || ''}`.trim();
+        // eslint-disable-next-line no-console
+        console.error('[sherlock] eksekusi gagal', {
+          username,
+          message: error.message,
+          output: text
+        });
         reject(new Error(text || error.message));
         return;
       }
 
       resolve(`${stdout || ''}\n${stderr || ''}`.trim());
     });
+  });
+
+  // eslint-disable-next-line no-console
+  console.info('[sherlock] eksekusi selesai', {
+    username,
+    outputChars: output.length,
+    reportDir: targetDir
   });
 
   const truncated = output.slice(0, env.SHERLOCK_MAX_OUTPUT_CHARS);

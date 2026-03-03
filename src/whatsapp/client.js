@@ -82,6 +82,38 @@ async function startWhatsAppClient() {
 
     if (!text) return;
 
+    const normalizedText = text.trim();
+    const sherlockPrefix = `${env.BOT_PREFIX}sherlock`;
+
+    if (normalizedText.toLowerCase().startsWith(sherlockPrefix.toLowerCase())) {
+      const argsText = normalizedText.slice(sherlockPrefix.length).trim();
+      const username = argsText || '-';
+
+      await sock.sendMessage(
+        remoteJid,
+        {
+          text: [
+            '🔔 *Informasi Proses Sherlock*',
+            `Target username: *${username}*`,
+            'Status: *Memulai proses eksekusi di server*'
+          ].join('\n')
+        },
+        { quoted: incoming }
+      );
+
+      await sock.sendMessage(
+        remoteJid,
+        {
+          text: [
+            '⏳ *Informasi Proses Sherlock*',
+            `Target username: *${username}*`,
+            'Status: *Sedang melakukan proses pencarian OSINT*'
+          ].join('\n')
+        },
+        { quoted: incoming }
+      );
+    }
+
     const response = await handleCommand(text);
     if (!response) return;
 
