@@ -70,5 +70,5 @@ pm2 startup
 ## 7) Catatan keamanan
 
 - Jangan pakai username dari user tanpa validasi (sudah divalidasi di service).
-- Batasi siapa yang boleh akses command (opsional: gunakan `WHATSAPP_OWNER_JID`).
+- Akses command tidak dibatasi berdasarkan JID owner (semua chat yang masuk bisa diproses command).
 - Simpan folder `session/` dengan permission ketat.

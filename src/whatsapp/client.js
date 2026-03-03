@@ -72,10 +72,6 @@ async function startWhatsAppClient() {
 
     if (!text) return;
 
-    if (env.WHATSAPP_OWNER_JID && remoteJid !== env.WHATSAPP_OWNER_JID) {
-      return;
-    }
-
     const response = await handleCommand(text);
     if (!response) return;
 
