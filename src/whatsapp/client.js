@@ -271,6 +271,16 @@ async function startWhatsAppClient() {
     );
   }
 
+
+  function isImageDocument(documentMessage) {
+    const mimeType = documentMessage?.mimetype || '';
+    return /^image\//i.test(mimeType);
+  }
+
+  function getMediaMimeType(source) {
+    return source?.message?.imageMessage?.mimetype || source?.message?.documentMessage?.mimetype || null;
+  }
+
   async function processPendingExif(remoteJid, incoming, pendingRequest) {
     const buffer = await downloadMediaMessage(
       pendingRequest.imageSource,
@@ -286,15 +296,22 @@ async function startWhatsAppClient() {
       throw new Error('Gagal mengunduh media gambar dari WhatsApp.');
     }
 
-    const mimeType = pendingRequest.imageSource?.message?.imageMessage?.mimetype;
+    const mimeType = getMediaMimeType(pendingRequest.imageSource);
     const result = await processExifFromBuffer(buffer, mimeType);
 
-    await sock.sendMessage(remoteJid, { text: result.summary }, { quoted: incoming });
+    const chunks = [result.summary, result.fullMetadata].filter(Boolean);
+
+    for (const chunk of chunks) {
+      await sock.sendMessage(remoteJid, { text: chunk }, { quoted: incoming });
+    }
   }
 
   function getQuotedImageSource(incoming) {
     const quotedMessage = incoming.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-    if (!quotedMessage?.imageMessage) return null;
+    const hasImage = Boolean(quotedMessage?.imageMessage);
+    const hasImageDocument = isImageDocument(quotedMessage?.documentMessage);
+
+    if (!hasImage && !hasImageDocument) return null;
 
     return {
       key: {
@@ -378,7 +395,7 @@ async function startWhatsAppClient() {
     const holehePrefix = `${env.BOT_PREFIX}holehe`;
     const exifPrefix = `${env.BOT_PREFIX}exif`;
 
-      if (incoming.message?.imageMessage) {
+      if (incoming.message?.imageMessage || isImageDocument(incoming.message?.documentMessage)) {
         await askExifConfirmation(remoteJid, incoming, incoming);
         return;
       }
@@ -392,7 +409,7 @@ async function startWhatsAppClient() {
             remoteJid,
             {
               text: [
-                'Untuk memproses EXIF, silakan kirim gambar langsung atau reply gambar dengan perintah *!exif*.'
+                'Untuk memproses EXIF, silakan kirim gambar (atau dokumen bergambar) langsung, atau reply medianya dengan perintah *!exif*.'
               ].join('\n')
             },
             { quoted: incoming }
