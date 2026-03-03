@@ -1,6 +1,8 @@
 const { runSherlock } = require('../services/sherlock');
 const { runHolehe } = require('../services/holehe');
 const { runMaigret } = require('../services/maigret');
+const { runTheHarvester } = require('../services/theharvester');
+const { runInfoga } = require('../services/infoga');
 const { env } = require('../config/env');
 
 function getHelpMessage() {
@@ -12,6 +14,8 @@ function getHelpMessage() {
     `${env.BOT_PREFIX}sherlock <username>`,
     `${env.BOT_PREFIX}holehe <email>`,
     `${env.BOT_PREFIX}maigret <username>`,
+    `${env.BOT_PREFIX}theharvester <domain>`,
+    `${env.BOT_PREFIX}infoga <email|domain>`,
     `${env.BOT_PREFIX}exif (reply gambar)`,
     `${env.BOT_PREFIX}help`
   ].join('\n');
@@ -113,6 +117,68 @@ async function handleCommand(text) {
       return [
         '❌ *Informasi Proses Maigret*',
         `Target username: *${username || '-'}*`,
+        'Status: *Proses selesai dengan kegagalan*',
+        '',
+        'Silakan coba kembali. Jika kendala berulang, mohon hubungi operator untuk pemeriksaan log server.'
+      ].join('\n');
+    }
+  }
+
+  if (command === 'theharvester') {
+    const domain = rest.join(' ');
+    try {
+      const result = await runTheHarvester(domain);
+      return [
+        `✅ Proses theHarvester selesai untuk *${result.domain || domain}*`,
+        `📄 File output: ${result.outputFile}`,
+        '',
+        '*Ringkasan hasil eksekusi:*',
+        '```',
+        result.output || 'Tidak ada output.',
+        '```'
+      ].join('\n');
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('theHarvester command failed:', {
+        domain,
+        error: error?.stack || error?.message || String(error)
+      });
+
+      return [
+        '❌ *Informasi Proses theHarvester*',
+        `Target domain: *${domain || '-'}*`,
+        'Status: *Proses selesai dengan kegagalan*',
+        '',
+        'Silakan coba kembali. Jika kendala berulang, mohon hubungi operator untuk pemeriksaan log server.'
+      ].join('\n');
+    }
+  }
+
+  if (command === 'infoga') {
+    const target = rest.join(' ');
+    try {
+      const result = await runInfoga(target);
+      return [
+        `✅ Proses Infoga selesai untuk *${result.target || target}*`,
+        result.outputFile ? `📄 File output: ${result.outputFile}` : null,
+        '',
+        '*Ringkasan hasil eksekusi:*',
+        '```',
+        result.output || 'Tidak ada output.',
+        '```'
+      ]
+        .filter(Boolean)
+        .join('\n');
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Infoga command failed:', {
+        target,
+        error: error?.stack || error?.message || String(error)
+      });
+
+      return [
+        '❌ *Informasi Proses Infoga*',
+        `Target email/domain: *${target || '-'}*`,
         'Status: *Proses selesai dengan kegagalan*',
         '',
         'Silakan coba kembali. Jika kendala berulang, mohon hubungi operator untuk pemeriksaan log server.'
