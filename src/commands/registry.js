@@ -159,8 +159,13 @@ async function handleCommand(text) {
     try {
       const result = await runInfoga(target);
       return [
-        `✅ Proses Infoga selesai untuk *${result.target || target}*`,
+        result.unavailable
+          ? `⚠️ Infoga tidak tersedia di server untuk *${result.target || target}*`
+          : `✅ Proses Infoga selesai untuk *${result.target || target}*`,
         result.outputFile ? `📄 File output: ${result.outputFile}` : null,
+        result.unavailable
+          ? 'Detail: Infoga membutuhkan Python 2 (python2/python2.7) yang tidak tersedia pada host saat ini.'
+          : null,
         '',
         '*Ringkasan hasil eksekusi:*',
         '```',
