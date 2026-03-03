@@ -38,6 +38,8 @@ Lalu ubah `.env` agar command Sherlock memakai virtualenv:
 SHERLOCK_CMD=./.venv/bin/sherlock
 ```
 
+Nilai di atas harus sama dengan output `Final command (.env)` dari `./scripts/setup_sherlock.sh` agar tidak terjadi instruksi campur untuk operator.
+
 ## 4) Jalankan bot
 
 ```bash
