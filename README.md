@@ -35,7 +35,7 @@ cp .env.example .env
 
 Script ini akan menginstal Sherlock, Holehe, Maigret, theHarvester, dan Infoga ke `.venv`.
 
-Catatan penting untuk Infoga: package `infoga` tidak tersedia di PyPI, jadi installer memakai source git (`git+https://github.com/m4ll0k/Infoga.git`) secara default, dengan mode non-interaktif git (`GIT_TERMINAL_PROMPT=0`).
+Catatan penting untuk Infoga: package `infoga` tidak tersedia di PyPI, jadi installer memakai source git (`git+https://github.com/robertswin/Infoga.git`) secara default, dengan mode non-interaktif git (`GIT_TERMINAL_PROMPT=0`).
 Jika source `git+https://...` gagal, script otomatis mencoba fallback non-git (arsip publik/codeload) agar tidak bergantung pada `git clone`.
 
 Jika server Anda memakai mirror/private git, override source tetap didukung dengan environment variable berikut saat setup:
