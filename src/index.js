@@ -43,6 +43,7 @@ async function bootstrap() {
   try {
     await verifyCommand(env.SHERLOCK_CMD, 'sherlock', [['--version'], ['--help']]);
     await verifyCommand(env.HOLEHE_CMD, 'holehe', [['--help']]);
+    await verifyCommand(env.MAIGRET_CMD, 'maigret', [['--help']]);
     await verifyCommand(env.THEHARVESTER_CMD, 'theHarvester', [['--help'], ['-h']]);
     await verifyCommand(env.INFOGA_CMD, 'infoga', [['--help'], ['-h']]);
     await verifyCommand(env.EXIFTOOL_CMD, 'exiftool', [['-ver']]);
@@ -50,7 +51,7 @@ async function bootstrap() {
     // eslint-disable-next-line no-console
     console.error('Preflight tool gagal. Jalankan setup dependencies lalu restart service. Root cause:', error);
     throw new Error(
-      'Sherlock/Holehe/theHarvester/Infoga/EXIFTOOL_CMD command tidak siap. Pastikan EXIFTool terpasang (Ubuntu: apt install exiftool), lalu jalankan setup dependencies dan restart service.'
+      'Sherlock/Holehe/Maigret/theHarvester/Infoga/EXIFTOOL command tidak siap. Pastikan EXIFTool terpasang (Ubuntu: apt install exiftool), lalu jalankan setup dependencies dan restart service.'
     );
   }
 
