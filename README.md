@@ -122,6 +122,9 @@ npm start
 - `!sherlock <username>`
 - `!holehe <email>`
 - `!maigret <username>`
+- `!theharvester <domain>`
+- `!infoga <email|domain>`
+- `!exif` (reply gambar)
 
 Contoh:
 
@@ -129,6 +132,8 @@ Contoh:
 !sherlock johndoe
 !holehe target@email.com
 !maigret johndoe
+!theharvester example.com
+!infoga target@email.com
 ```
 
 ## 6) Jalankan via PM2 (Production)
