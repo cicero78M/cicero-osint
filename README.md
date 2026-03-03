@@ -45,9 +45,43 @@ INFOGA_PIP_SOURCE='git+https://<mirror-anda>/Infoga.git' ./scripts/setup_sherloc
 ```
 
 Troubleshooting kredensial Infoga:
-- Jika install dari URL publik gagal dan muncul indikasi auth, periksa konfigurasi global `git credential helper`.
-- Periksa juga rule `git config --global --get-regexp '^url\..*\.insteadof$'` karena bisa menginjeksi kredensial/host rewrite ke URL publik.
-- Script akan menampilkan source yang dicoba (source utama + fallback archive) untuk mempermudah diagnosis.
+
+### Troubleshooting Infoga
+
+1. **Verifikasi source final yang dipakai installer (`INFOGA_PIP_SOURCE`)**
+   - Jalankan setup dan perhatikan log source final yang dicoba script (source utama + fallback archive).
+   - Jika perlu memaksa source tertentu, set env secara eksplisit saat eksekusi:
+
+   ```bash
+   INFOGA_PIP_SOURCE='git+https://github.com/robertswin/Infoga.git' ./scripts/setup_sherlock.sh
+   ```
+
+2. **Cek konfigurasi git global yang sering menyebabkan rewrite/auth**
+
+   ```bash
+   git config --global --get-regexp 'url\..*insteadof'
+   git config --global credential.helper
+   ```
+
+   Rule `url.*.insteadof` dapat me-rewrite URL publik (mis. ke host private) sehingga installer meminta auth meskipun source terlihat publik.
+
+3. **Bypass cepat per-eksekusi setup (nonaktifkan prompt git)**
+   - Jalankan installer dengan env non-interaktif git (sesuai implementasi script):
+
+   ```bash
+   GIT_TERMINAL_PROMPT=0 ./scripts/setup_sherlock.sh
+   ```
+
+   Ini mencegah prompt kredensial interaktif menggantung saat ada masalah autentikasi/akses.
+
+4. **Gunakan mirror internal sebagai jalur produksi**
+   - Jika akses GitHub langsung dibatasi oleh kebijakan jaringan/egress, arahkan installer ke mirror internal:
+
+   ```bash
+   INFOGA_PIP_SOURCE='git+https://<mirror-internal-anda>/Infoga.git' ./scripts/setup_sherlock.sh
+   ```
+
+   Pendekatan ini direkomendasikan untuk environment produksi yang wajib lewat repository internal.
 
 Lalu ubah `.env` agar command Sherlock, Holehe, Maigret, theHarvester, dan Infoga memakai virtualenv (default binary):
 
