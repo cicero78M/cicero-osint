@@ -33,7 +33,6 @@ async function runInstaloader(rawUsername) {
     '--no-pictures',
     '--no-videos',
     '--no-video-thumbnails',
-    '--fast-update',
     '--',
     username
   ];
