@@ -40,19 +40,36 @@ async function bootstrap() {
   await fs.mkdir(env.THEHARVESTER_WORKDIR, { recursive: true });
   await fs.mkdir(env.INFOGA_WORKDIR, { recursive: true });
 
+  const requiredChecks = [
+    { command: env.SHERLOCK_CMD, name: 'sherlock', checks: [['--version'], ['--help']] },
+    { command: env.HOLEHE_CMD, name: 'holehe', checks: [['--help']] },
+    { command: env.MAIGRET_CMD, name: 'maigret', checks: [['--help']] },
+    { command: env.THEHARVESTER_CMD, name: 'theHarvester', checks: [['--help'], ['-h']] },
+    { command: env.EXIFTOOL_CMD, name: 'exiftool', checks: [['-ver']] }
+  ];
+
   try {
-    await verifyCommand(env.SHERLOCK_CMD, 'sherlock', [['--version'], ['--help']]);
-    await verifyCommand(env.HOLEHE_CMD, 'holehe', [['--help']]);
-    await verifyCommand(env.MAIGRET_CMD, 'maigret', [['--help']]);
-    await verifyCommand(env.THEHARVESTER_CMD, 'theHarvester', [['--help'], ['-h']]);
-    await verifyCommand(env.INFOGA_CMD, 'infoga', [['--help'], ['-h']]);
-    await verifyCommand(env.EXIFTOOL_CMD, 'exiftool', [['-ver']]);
+    for (const tool of requiredChecks) {
+      // eslint-disable-next-line no-await-in-loop
+      await verifyCommand(tool.command, tool.name, tool.checks);
+    }
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Preflight tool gagal. Jalankan setup dependencies lalu restart service. Root cause:', error);
     throw new Error(
-      'Sherlock/Holehe/Maigret/theHarvester/Infoga/EXIFTOOL command tidak siap. Pastikan EXIFTool terpasang (Ubuntu: apt install exiftool), lalu jalankan setup dependencies dan restart service.'
+      'Sherlock/Holehe/Maigret/theHarvester/EXIFTOOL command tidak siap. Pastikan EXIFTool terpasang (Ubuntu: apt install exiftool), lalu jalankan setup dependencies dan restart service.'
     );
+  }
+
+  if (env.INFOGA_OPTIONAL) {
+    try {
+      await verifyCommand(env.INFOGA_CMD, 'infoga', [['--help'], ['-h']]);
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn('Infoga preflight gagal. Service tetap jalan karena INFOGA_OPTIONAL=true. Detail:', error?.message || error);
+    }
+  } else {
+    await verifyCommand(env.INFOGA_CMD, 'infoga', [['--help'], ['-h']]);
   }
 
   await startWhatsAppClient();

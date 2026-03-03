@@ -159,6 +159,7 @@ HOLEHE_CMD="./.venv/bin/holehe"
 MAIGRET_CMD="./.venv/bin/maigret"
 THEHARVESTER_CMD="./.venv/bin/theHarvester"
 INFOGA_CMD="./.venv/bin/infoga"
+INFOGA_OPTIONAL="${INFOGA_OPTIONAL:-true}"
 VERIFICATION_STATUS="PASS"
 SETUP_LOG_FILE="./.venv/setup_sherlock.log"
 
@@ -196,6 +197,7 @@ verify_tool_command() {
   local env_key="$2"
   local cmd_path="$3"
   local help_arg="$4"
+  local optional="${5:-false}"
   local result_file
   local output
   local reason
@@ -203,7 +205,6 @@ verify_tool_command() {
   result_file="$(mktemp)"
 
   if ! "${cmd_path}" "${help_arg}" >"${result_file}" 2>&1; then
-    VERIFICATION_STATUS="FAIL"
     output="$(cat "${result_file}")"
     reason="$(detect_failure_reason "${output}")"
 
@@ -214,6 +215,17 @@ verify_tool_command() {
       echo ""
     } >> "${SETUP_LOG_FILE}"
 
+    if [[ "${optional}" == "true" ]]; then
+      echo "${tool_name} verification warning (optional): ${reason}." >&2
+      echo "Final command (.env): ${env_key}=${cmd_path}" >&2
+      echo "Output cuplikan (${tool_name}):" >&2
+      sed -n '1,20p' "${result_file}" >&2
+      echo "Log lengkap verifikasi: ${SETUP_LOG_FILE}" >&2
+      rm -f "${result_file}"
+      return 0
+    fi
+
+    VERIFICATION_STATUS="FAIL"
     echo "${tool_name} verification failed: ${reason}." >&2
     echo "Final command (.env): ${env_key}=${cmd_path}" >&2
     echo "Output cuplikan (${tool_name}):" >&2
@@ -241,7 +253,7 @@ verify_tool_command "Sherlock" "SHERLOCK_CMD" "${SHERLOCK_CMD}" "--help"
 verify_tool_command "Holehe" "HOLEHE_CMD" "${HOLEHE_CMD}" "--help"
 verify_tool_command "Maigret" "MAIGRET_CMD" "${MAIGRET_CMD}" "--help"
 verify_tool_command "theHarvester" "THEHARVESTER_CMD" "${THEHARVESTER_CMD}" "--help"
-verify_tool_command "Infoga" "INFOGA_CMD" "${INFOGA_CMD}" "--help"
+verify_tool_command "Infoga" "INFOGA_CMD" "${INFOGA_CMD}" "--help" "${INFOGA_OPTIONAL}"
 
 echo "Sherlock, Holehe, Maigret, theHarvester, dan Infoga terpasang di virtualenv .venv"
 echo "Final command (.env): SHERLOCK_CMD=${SHERLOCK_CMD}"
@@ -249,4 +261,5 @@ echo "Final command (.env): HOLEHE_CMD=${HOLEHE_CMD}"
 echo "Final command (.env): MAIGRET_CMD=${MAIGRET_CMD}"
 echo "Final command (.env): THEHARVESTER_CMD=${THEHARVESTER_CMD}"
 echo "Final command (.env): INFOGA_CMD=${INFOGA_CMD}"
+echo "Final command (.env): INFOGA_OPTIONAL=${INFOGA_OPTIONAL}"
 echo "Verification status: ${VERIFICATION_STATUS}"
