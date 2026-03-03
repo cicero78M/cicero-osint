@@ -271,6 +271,56 @@ async function startWhatsAppClient() {
     );
   }
 
+
+  function isImageDocument(documentMessage) {
+    const mimeType = documentMessage?.mimetype || '';
+    const fileName = String(documentMessage?.fileName || '').toLowerCase();
+
+    if (/^image\//i.test(mimeType)) return true;
+    if (mimeType === 'application/octet-stream') {
+      return /\.(jpg|jpeg|png|webp|gif|heic|heif|tif|tiff|bmp)$/i.test(fileName);
+    }
+    return false;
+  }
+
+  function getMediaMimeType(source) {
+    return source?.message?.imageMessage?.mimetype || source?.message?.documentMessage?.mimetype || null;
+  }
+
+  function splitTextByLength(text, maxLength = 3500) {
+    const normalized = String(text || '');
+    if (!normalized) return [];
+    if (normalized.length <= maxLength) return [normalized];
+
+    const chunks = [];
+    let current = '';
+
+    for (const line of normalized.split('\n')) {
+      const candidate = current ? `${current}\n${line}` : line;
+      if (candidate.length <= maxLength) {
+        current = candidate;
+        continue;
+      }
+
+      if (current) {
+        chunks.push(current);
+        current = '';
+      }
+
+      if (line.length <= maxLength) {
+        current = line;
+        continue;
+      }
+
+      for (let i = 0; i < line.length; i += maxLength) {
+        chunks.push(line.slice(i, i + maxLength));
+      }
+    }
+
+    if (current) chunks.push(current);
+    return chunks;
+  }
+
   async function processPendingExif(remoteJid, incoming, pendingRequest) {
     const buffer = await downloadMediaMessage(
       pendingRequest.imageSource,
@@ -286,15 +336,22 @@ async function startWhatsAppClient() {
       throw new Error('Gagal mengunduh media gambar dari WhatsApp.');
     }
 
-    const mimeType = pendingRequest.imageSource?.message?.imageMessage?.mimetype;
+    const mimeType = getMediaMimeType(pendingRequest.imageSource);
     const result = await processExifFromBuffer(buffer, mimeType);
 
-    await sock.sendMessage(remoteJid, { text: result.summary }, { quoted: incoming });
+    const chunks = [result.summary, ...splitTextByLength(result.fullMetadata)].filter(Boolean);
+
+    for (const chunk of chunks) {
+      await sock.sendMessage(remoteJid, { text: chunk }, { quoted: incoming });
+    }
   }
 
   function getQuotedImageSource(incoming) {
     const quotedMessage = incoming.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-    if (!quotedMessage?.imageMessage) return null;
+    const hasImage = Boolean(quotedMessage?.imageMessage);
+    const hasImageDocument = isImageDocument(quotedMessage?.documentMessage);
+
+    if (!hasImage && !hasImageDocument) return null;
 
     return {
       key: {
@@ -378,7 +435,7 @@ async function startWhatsAppClient() {
     const holehePrefix = `${env.BOT_PREFIX}holehe`;
     const exifPrefix = `${env.BOT_PREFIX}exif`;
 
-      if (incoming.message?.imageMessage) {
+      if (incoming.message?.imageMessage || isImageDocument(incoming.message?.documentMessage)) {
         await askExifConfirmation(remoteJid, incoming, incoming);
         return;
       }
@@ -392,7 +449,7 @@ async function startWhatsAppClient() {
             remoteJid,
             {
               text: [
-                'Untuk memproses EXIF, silakan kirim gambar langsung atau reply gambar dengan perintah *!exif*.'
+                'Untuk memproses EXIF, silakan kirim gambar (atau dokumen bergambar) langsung, atau reply medianya dengan perintah *!exif*.'
               ].join('\n')
             },
             { quoted: incoming }
