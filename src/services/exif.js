@@ -174,6 +174,24 @@ function formatRawMetadata(data) {
   return lines.join('\n');
 }
 
+function formatRawMetadata(data) {
+  const sortedKeys = Object.keys(data || {})
+    .filter((key) => key !== 'SourceFile')
+    .sort((a, b) => a.localeCompare(b));
+
+  const lines = ['📄 *Semua metadata yang dibaca exiftool*'];
+
+  for (const key of sortedKeys) {
+    lines.push(`• ${key}: ${toPrintable(data[key])}`);
+  }
+
+  if (sortedKeys.length === 0) {
+    lines.push('• Tidak ada metadata selain informasi SourceFile.');
+  }
+
+  return lines.join('\n');
+}
+
 async function processExifFromBuffer(buffer, mimeType) {
   let tempPath;
   try {
