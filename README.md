@@ -1,6 +1,6 @@
 # CICERO Sherlock WhatsApp Bot (Baileys)
 
-Project ini menjalankan perintah Sherlock, Holehe, Maigret, dan theHarvester melalui WhatsApp menggunakan Baileys.
+Project ini menjalankan perintah Sherlock, Holehe, Maigret, Instaloader, dan theHarvester melalui WhatsApp menggunakan Baileys.
 
 ## 1) Prasyarat Server (Ubuntu)
 
@@ -33,7 +33,7 @@ cp .env.example .env
 ./scripts/setup_sherlock.sh
 ```
 
-Script ini akan menginstal Sherlock, Holehe, dan Maigret ke `.venv`. Khusus theHarvester diisolasi ke virtualenv terpisah `.venv-theharvester` untuk mencegah konflik dependency dengan Maigret; command yang dipakai aplikasi tetap `./.venv/bin/theHarvester` melalui wrapper.
+Script ini akan menginstal Sherlock, Holehe, Maigret, dan Instaloader ke `.venv`. Khusus theHarvester diisolasi ke virtualenv terpisah `.venv-theharvester` untuk mencegah konflik dependency dengan Maigret; command yang dipakai aplikasi tetap `./.venv/bin/theHarvester` melalui wrapper.
 
 Khusus theHarvester, installer mengambil source resmi dari repository upstream `laramies/theHarvester` melalui pip VCS (`git+https://github.com/laramies/theHarvester.git`). Secara default, script memilih versi `4.9.2` saat Python host >= 3.12, dan otomatis fallback ke `4.6.0` saat Python host < 3.12 (kompatibel Python 3.9+). Anda bisa override dengan `THEHARVESTER_SOURCE_REPO` dan/atau `THEHARVESTER_VERSION` saat eksekusi setup bila diperlukan. Untuk menjaga kompatibilitas Maigret, dependency `aiohttp-socks` di `.venv` dipin ke `<0.11.0` sesuai requirement Maigret. Setelah proses install, script melakukan validasi eksplisit bahwa command `./.venv/bin/theHarvester` (wrapper ke `.venv-theharvester`) benar-benar executable sebelum lanjut ke verifikasi `--help`.
 
@@ -59,6 +59,7 @@ npm start
 - `!sherlock <username>`
 - `!holehe <email>`
 - `!maigret <username>`
+- `!instaloader <username>`
 - `!theharvester <domain>`
 - `!exif` (reply gambar)
 
@@ -68,6 +69,7 @@ Contoh:
 !sherlock johndoe
 !holehe target@email.com
 !maigret johndoe
+!instaloader johndoe
 !theharvester example.com
 ```
 

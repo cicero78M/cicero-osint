@@ -38,12 +38,14 @@ async function bootstrap() {
   await fs.mkdir(env.SHERLOCK_WORKDIR, { recursive: true });
   await fs.mkdir(env.HOLEHE_WORKDIR, { recursive: true });
   await fs.mkdir(env.MAIGRET_WORKDIR, { recursive: true });
+  await fs.mkdir(env.INSTALOADER_WORKDIR, { recursive: true });
   await fs.mkdir(env.THEHARVESTER_WORKDIR, { recursive: true });
 
   const requiredChecks = [
     { command: env.SHERLOCK_CMD, name: 'sherlock', checks: [['--version'], ['--help']] },
     { command: env.HOLEHE_CMD, name: 'holehe', checks: [['--help']] },
     { command: env.MAIGRET_CMD, name: 'maigret', checks: [['--help']] },
+    { command: env.INSTALOADER_CMD, name: 'instaloader', checks: [['--help']] },
     { command: env.THEHARVESTER_CMD, name: 'theHarvester', checks: [['--help'], ['-h']] },
     { command: env.EXIFTOOL_CMD, name: 'exiftool', checks: [['-ver']] }
   ];
@@ -57,7 +59,7 @@ async function bootstrap() {
     // eslint-disable-next-line no-console
     console.error('Preflight tool gagal. Jalankan setup dependencies lalu restart service. Root cause:', error);
     throw new Error(
-      'Sherlock/Holehe/Maigret/theHarvester/EXIFTOOL command tidak siap. Pastikan EXIFTool terpasang (Ubuntu: apt install exiftool), lalu jalankan setup dependencies dan restart service.'
+      'Sherlock/Holehe/Maigret/Instaloader/theHarvester/EXIFTOOL command tidak siap. Pastikan EXIFTool terpasang (Ubuntu: apt install exiftool), lalu jalankan setup dependencies dan restart service.'
     );
   }
 

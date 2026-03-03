@@ -14,6 +14,7 @@ python3 -m pip install --upgrade pip
 python3 -m pip install sherlock-project
 python3 -m pip install holehe
 python3 -m pip install maigret
+python3 -m pip install instaloader
 
 # Pastikan dependency Maigret kompatibel.
 # Urutan instalasi sherlock/holehe sering menurunkan versi aiohttp/requests/lxml,
@@ -65,6 +66,7 @@ chmod +x ./.venv/bin/theHarvester
 SHERLOCK_CMD="./.venv/bin/sherlock"
 HOLEHE_CMD="./.venv/bin/holehe"
 MAIGRET_CMD="./.venv/bin/maigret"
+INSTALOADER_CMD="./.venv/bin/instaloader"
 THEHARVESTER_CMD="./.venv/bin/theHarvester"
 VERIFICATION_STATUS="PASS"
 SETUP_LOG_FILE="./.venv/setup_sherlock.log"
@@ -143,11 +145,13 @@ fi
 verify_tool_command "Sherlock" "SHERLOCK_CMD" "${SHERLOCK_CMD}" "--help"
 verify_tool_command "Holehe" "HOLEHE_CMD" "${HOLEHE_CMD}" "--help"
 verify_tool_command "Maigret" "MAIGRET_CMD" "${MAIGRET_CMD}" "--help"
+verify_tool_command "Instaloader" "INSTALOADER_CMD" "${INSTALOADER_CMD}" "--help"
 verify_tool_command "theHarvester" "THEHARVESTER_CMD" "${THEHARVESTER_CMD}" "--help"
 
-echo "Sherlock, Holehe, Maigret, theHarvester terpasang di virtualenv .venv"
+echo "Sherlock, Holehe, Maigret, Instaloader, theHarvester terpasang di virtualenv .venv"
 echo "Final command (.env): SHERLOCK_CMD=${SHERLOCK_CMD}"
 echo "Final command (.env): HOLEHE_CMD=${HOLEHE_CMD}"
 echo "Final command (.env): MAIGRET_CMD=${MAIGRET_CMD}"
+echo "Final command (.env): INSTALOADER_CMD=${INSTALOADER_CMD}"
 echo "Final command (.env): THEHARVESTER_CMD=${THEHARVESTER_CMD}"
 echo "Verification status: ${VERIFICATION_STATUS}"
