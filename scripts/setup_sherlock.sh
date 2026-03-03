@@ -11,6 +11,17 @@ python3 -m pip install sherlock-project
 python3 -m pip install holehe
 python3 -m pip install maigret
 
+# Pastikan dependency Maigret kompatibel.
+# Urutan instalasi sherlock/holehe sering menurunkan versi aiohttp/requests/lxml,
+# sehingga import Maigret gagal (contoh: aiohttp.abc.ResolveResult tidak ada di aiohttp lama).
+python3 -m pip install --upgrade \
+  "aiohttp>=3.12.14,<4.0.0" \
+  "aiohttp-socks>=0.10.1" \
+  "async-timeout>=5.0.1,<6.0.0" \
+  "certifi>=2025.6.15,<2026.0.0" \
+  "lxml>=5.4.0,<6.0.0" \
+  "requests>=2.32.4,<3.0.0"
+
 THEHARVESTER_SOURCE_REPO_DEFAULT="https://github.com/laramies/theHarvester.git"
 THEHARVESTER_VERSION_DEFAULT="4.9.2"
 THEHARVESTER_LEGACY_VERSION_DEFAULT="4.6.0"
