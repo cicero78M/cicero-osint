@@ -6,6 +6,23 @@ const { splitCmd } = require('./sherlock');
 
 const DOMAIN_MAX_LENGTH = 253;
 const DOMAIN_REGEX = /^(?=.{1,253}$)(?!-)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
+const ANSI_REGEX = /\u001b\[[0-9;]*m/g;
+
+function normalizeTheHarvesterOutput(rawText) {
+  const text = String(rawText || '').replace(/\r/g, '').replace(ANSI_REGEX, '').trim();
+  if (!text) {
+    return 'Tidak ada data yang dikembalikan oleh theHarvester.';
+  }
+
+  const lines = text.split('\n');
+  const targetIndex = lines.findIndex((line) => line.trim().startsWith('[*] Target:'));
+  const relevantLines = targetIndex >= 0 ? lines.slice(targetIndex) : lines;
+
+  return relevantLines
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
 
 function sanitizeDomain(input) {
   const domain = String(input || '').trim().toLowerCase();
@@ -67,7 +84,7 @@ async function runTheHarvester(rawDomain) {
       finalArgs,
       { timeout: env.THEHARVESTER_TIMEOUT_MS, cwd: reportDir },
       async (error, stdout, stderr) => {
-        const text = `${stdout || ''}\n${stderr || ''}`.trim();
+        const text = normalizeTheHarvesterOutput(`${stdout || ''}\n${stderr || ''}`);
 
         try {
           await fs.writeFile(outputFile, text || '[theharvester] tidak ada output');
