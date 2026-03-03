@@ -9,7 +9,7 @@ source .venv/bin/activate
 python3 -m pip install --upgrade pip
 python3 -m pip install sherlock-project
 
-SHERLOCK_CMD="./.venv/bin/python -m sherlock"
+SHERLOCK_CMD="./.venv/bin/sherlock"
 VERIFICATION_STATUS="PASS"
 
 if ! ${SHERLOCK_CMD} --help >/dev/null 2>&1; then

@@ -8,7 +8,7 @@ const schema = z.object({
   NODE_ENV: z.string().default('production'),
   BOT_PREFIX: z.string().default('!'),
   SESSION_DIR: z.string().default('./session'),
-  SHERLOCK_CMD: z.string().default('./.venv/bin/python -m sherlock'),
+  SHERLOCK_CMD: z.string().default('./.venv/bin/sherlock'),
   SHERLOCK_WORKDIR: z.string().default('./runtime'),
   SHERLOCK_TIMEOUT_MS: z.coerce.number().int().positive().default(180000),
   SHERLOCK_MAX_OUTPUT_CHARS: z.coerce.number().int().positive().default(3500),
