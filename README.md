@@ -42,7 +42,7 @@ Jika source `git+https://...` gagal, script otomatis mencoba fallback non-git (a
 
 Jika server Anda memakai mirror/private git, override source tetap didukung dengan environment variable berikut saat setup:
 
-Catatan kompatibilitas: repo `robertswin/Infoga` bukan paket pip siap install (tidak memiliki `setup.py`/`pyproject.toml`) dan script utamanya berjalan di Python 2. Installer menyiapkan source + wrapper `./.venv/bin/infoga`; pastikan host memiliki `python2`/`python2.7` agar verifikasi Infoga lulus.
+Catatan kompatibilitas: repo `robertswin/Infoga` bukan paket pip siap install (tidak memiliki `setup.py`/`pyproject.toml`) dan script utamanya berjalan di Python 2. Installer menyiapkan source + wrapper `./.venv/bin/infoga`; jika host tidak memiliki `python2`/`python2.7`, verifikasi Infoga akan menjadi warning (default `INFOGA_OPTIONAL=true`) dan setup tetap lanjut. Set `INFOGA_OPTIONAL=false` bila Anda ingin setup gagal keras saat Infoga tidak siap.
 
 ```bash
 INFOGA_SOURCE='https://<mirror-anda>/Infoga.git' ./scripts/setup_sherlock.sh
@@ -95,9 +95,10 @@ HOLEHE_CMD=./.venv/bin/holehe
 MAIGRET_CMD=./.venv/bin/maigret
 THEHARVESTER_CMD=./.venv/bin/theHarvester
 INFOGA_CMD=./.venv/bin/infoga
+INFOGA_OPTIONAL=true
 ```
 
-Nilai di atas harus sama dengan output `Final command (.env)` dari `./scripts/setup_sherlock.sh` agar preflight saat startup tidak gagal karena binary tidak ditemukan.
+Nilai di atas harus sama dengan output `Final command (.env)` dari `./scripts/setup_sherlock.sh` agar preflight saat startup tidak gagal karena binary tidak ditemukan. Khusus Infoga, startup default tidak memblokir proses saat Infoga tidak siap (`INFOGA_OPTIONAL=true`) dan hanya menulis warning di log.
 
 
 Jika lokasi executable EXIFTool berbeda dari default, set override pada `.env`:

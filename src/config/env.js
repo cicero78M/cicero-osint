@@ -25,6 +25,10 @@ const schema = z.object({
   THEHARVESTER_TIMEOUT_MS: z.coerce.number().int().positive().default(180000),
   THEHARVESTER_MAX_OUTPUT_CHARS: z.coerce.number().int().positive().default(3500),
   INFOGA_CMD: z.string().default('./.venv/bin/infoga'),
+  INFOGA_OPTIONAL: z
+    .string()
+    .default('true')
+    .transform((v) => v === 'true'),
   INFOGA_WORKDIR: z.string().default('./runtime/infoga'),
   INFOGA_TIMEOUT_MS: z.coerce.number().int().positive().default(180000),
   INFOGA_MAX_OUTPUT_CHARS: z.coerce.number().int().positive().default(3500),
