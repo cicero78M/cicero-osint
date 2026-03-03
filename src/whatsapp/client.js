@@ -322,6 +322,7 @@ async function startWhatsAppClient() {
     const pendingKey = getPendingKey(incoming);
     const pendingRequest = pendingExifRequests.get(pendingKey);
 
+    try {
     if (!pendingRequest && /^(ya|tidak)$/i.test(normalizedText)) {
       await sock.sendMessage(
         remoteJid,
@@ -350,38 +351,28 @@ async function startWhatsAppClient() {
         logger.error({ err: error }, 'Gagal memproses EXIF');
         await sock.sendMessage(
           remoteJid,
-          { text: '⏳ Permintaan diproses. Sistem sedang mengekstrak metadata EXIF gambar Anda.' },
+          {
+            text: [
+              '❌ *Analisis Metadata Gambar*',
+              'Proses EXIF gagal dijalankan karena EXIF tool belum terpasang atau belum dikonfigurasi.',
+              `Detail: ${error?.message || 'Terjadi kesalahan tidak terduga.'}`
+            ].join('\n')
+          },
           { quoted: incoming }
         );
-
-        try {
-          await processPendingExif(remoteJid, incoming, pendingRequest);
-        } catch (error) {
-          logger.error({ err: error }, 'Gagal memproses EXIF');
-          await sock.sendMessage(
-            remoteJid,
-            {
-              text: [
-                '❌ *Analisis Metadata Gambar*',
-                'Proses EXIF gagal dijalankan karena EXIF tool belum terpasang atau belum dikonfigurasi.',
-                `Detail: ${error?.message || 'Terjadi kesalahan tidak terduga.'}`
-              ].join('\n')
-            },
-            { quoted: incoming }
-          );
-        }
-        return;
       }
+      return;
+    }
 
-      if (pendingRequest && /^tidak$/i.test(normalizedText)) {
-        pendingExifRequests.delete(pendingKey);
-        await sock.sendMessage(
-          remoteJid,
-          { text: 'Permintaan pemrosesan metadata dibatalkan sesuai instruksi Anda.' },
-          { quoted: incoming }
-        );
-        return;
-      }
+    if (pendingRequest && /^tidak$/i.test(normalizedText)) {
+      pendingExifRequests.delete(pendingKey);
+      await sock.sendMessage(
+        remoteJid,
+        { text: 'Permintaan pemrosesan metadata dibatalkan sesuai instruksi Anda.' },
+        { quoted: incoming }
+      );
+      return;
+    }
 
     const sherlockPrefix = `${env.BOT_PREFIX}sherlock`;
     const holehePrefix = `${env.BOT_PREFIX}holehe`;
