@@ -10,7 +10,13 @@ python3 -m pip install --upgrade pip
 python3 -m pip install sherlock-project
 python3 -m pip install holehe
 python3 -m pip install maigret
-python3 -m pip install theHarvester
+
+THEHARVESTER_SOURCE_REPO_DEFAULT="https://github.com/laramies/theHarvester.git"
+THEHARVESTER_VERSION_DEFAULT="4.9.2"
+THEHARVESTER_SOURCE_REPO="${THEHARVESTER_SOURCE_REPO:-$THEHARVESTER_SOURCE_REPO_DEFAULT}"
+THEHARVESTER_VERSION="${THEHARVESTER_VERSION:-$THEHARVESTER_VERSION_DEFAULT}"
+
+python3 -m pip install "git+${THEHARVESTER_SOURCE_REPO}@${THEHARVESTER_VERSION}"
 
 INFOGA_SOURCE_DEFAULT="https://github.com/robertswin/Infoga.git"
 INFOGA_ARCHIVE_FALLBACK_DEFAULT="https://codeload.github.com/robertswin/Infoga/zip/refs/heads/master"
@@ -111,6 +117,15 @@ MAIGRET_CMD="./.venv/bin/maigret"
 THEHARVESTER_CMD="./.venv/bin/theHarvester"
 INFOGA_CMD="./.venv/bin/infoga"
 VERIFICATION_STATUS="PASS"
+
+if [[ ! -f "${THEHARVESTER_CMD}" || ! -x "${THEHARVESTER_CMD}" ]]; then
+  VERIFICATION_STATUS="FAIL"
+  echo "theHarvester installation failed: executable ${THEHARVESTER_CMD} tidak ditemukan atau tidak executable." >&2
+  echo "theHarvester source: git+${THEHARVESTER_SOURCE_REPO}@${THEHARVESTER_VERSION}" >&2
+  echo "Final command (.env): THEHARVESTER_CMD=${THEHARVESTER_CMD}" >&2
+  echo "Verification status: ${VERIFICATION_STATUS}" >&2
+  exit 1
+fi
 
 if ! ${SHERLOCK_CMD} --help >/dev/null 2>&1; then
   VERIFICATION_STATUS="FAIL"
