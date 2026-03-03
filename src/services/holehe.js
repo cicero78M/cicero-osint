@@ -13,6 +13,23 @@ function sanitizeEmail(input) {
   return email;
 }
 
+function extractPositiveFindings(rawOutput) {
+  const normalized = String(rawOutput || '')
+    .replace(/\u001b\[[0-9;]*[A-Za-z]/g, '')
+    .replace(/\r/g, '\n');
+
+  const positiveLines = normalized
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => /^\[\+\]\s+/.test(line));
+
+  if (!positiveLines.length) {
+    return 'Tidak ditemukan indikasi email tertaut ([+]).';
+  }
+
+  return positiveLines.join('\n');
+}
+
 async function ensureWorkdir() {
   await fs.mkdir(env.HOLEHE_WORKDIR, { recursive: true });
 }
@@ -67,8 +84,9 @@ async function runHolehe(rawEmail) {
     outputFile
   });
 
-  const truncated = output.slice(0, env.HOLEHE_MAX_OUTPUT_CHARS);
-  const suffix = output.length > truncated.length ? '\n\n[output dipotong]' : '';
+  const filteredOutput = extractPositiveFindings(output);
+  const truncated = filteredOutput.slice(0, env.HOLEHE_MAX_OUTPUT_CHARS);
+  const suffix = filteredOutput.length > truncated.length ? '\n\n[output dipotong]' : '';
 
   return {
     email,
@@ -77,4 +95,4 @@ async function runHolehe(rawEmail) {
   };
 }
 
-module.exports = { runHolehe, sanitizeEmail };
+module.exports = { runHolehe, sanitizeEmail, extractPositiveFindings };
