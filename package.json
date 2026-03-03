@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "NODE_ENV=development node src/index.js",
-    "check": "node --check src/index.js && node --check src/config/env.js && node --check src/services/sherlock.js && node --check src/services/holehe.js && node --check src/services/maigret.js && node --check src/whatsapp/client.js && node --check src/commands/registry.js"
+    "check": "node --check src/index.js && node --check src/config/env.js && node --check src/services/sherlock.js && node --check src/services/holehe.js && node --check src/services/maigret.js && node --check src/services/exif.js && node --check src/whatsapp/client.js && node --check src/commands/registry.js"
   },
   "engines": {
     "node": ">=18"
