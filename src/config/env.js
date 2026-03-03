@@ -20,6 +20,8 @@ const schema = z.object({
   MAIGRET_WORKDIR: z.string().default('./runtime/maigret'),
   MAIGRET_TIMEOUT_MS: z.coerce.number().int().positive().default(180000),
   MAIGRET_MAX_OUTPUT_CHARS: z.coerce.number().int().positive().default(3500),
+  EXIFTOOL_CMD: z.string().default('exiftool'),
+  EXIFTOOL_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
   WHATSAPP_SEND_QR_TO_TERMINAL: z
     .string()
     .default('true')

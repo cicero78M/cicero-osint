@@ -12,6 +12,7 @@ function getHelpMessage() {
     `${env.BOT_PREFIX}sherlock <username>`,
     `${env.BOT_PREFIX}holehe <email>`,
     `${env.BOT_PREFIX}maigret <username>`,
+    `${env.BOT_PREFIX}exif (reply gambar)`,
     `${env.BOT_PREFIX}help`
   ].join('\n');
 }

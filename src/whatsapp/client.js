@@ -3,10 +3,12 @@ const P = require('pino');
 const qrcode = require('qrcode-terminal');
 const { env } = require('../config/env');
 const { handleCommand } = require('../commands/registry');
+const { processExifFromBuffer } = require('../services/exif');
 
 const logger = P({ level: 'info' });
 
 let baileys;
+const pendingExifRequests = new Map();
 
 async function loadBaileys() {
   if (!baileys) {
@@ -28,6 +30,7 @@ async function startWhatsAppClient() {
   const {
     default: makeWASocket,
     DisconnectReason,
+    downloadMediaMessage,
     useMultiFileAuthState,
     fetchLatestBaileysVersion
   } = await loadBaileys();
@@ -68,6 +71,68 @@ async function startWhatsAppClient() {
     }
   });
 
+  function getPendingKey(message) {
+    const remoteJid = message?.key?.remoteJid || '-';
+    const participant = message?.key?.participant || remoteJid;
+    return `${remoteJid}:${participant}`;
+  }
+
+  async function askExifConfirmation(remoteJid, incoming, imageSource) {
+    const pendingKey = getPendingKey(incoming);
+    pendingExifRequests.set(pendingKey, {
+      imageSource,
+      createdAt: Date.now()
+    });
+
+    await sock.sendMessage(
+      remoteJid,
+      {
+        text: [
+          '📷 *Analisis Metadata Gambar*',
+          'Kami menerima gambar Anda.',
+          'Apakah Anda ingin memproses metadata EXIF sekarang?',
+          "Silakan balas dengan *ya* untuk melanjutkan atau *tidak* untuk membatalkan."
+        ].join('\n')
+      },
+      { quoted: incoming }
+    );
+  }
+
+  async function processPendingExif(remoteJid, incoming, pendingRequest) {
+    const buffer = await downloadMediaMessage(
+      pendingRequest.imageSource,
+      'buffer',
+      {},
+      {
+        logger,
+        reuploadRequest: sock.updateMediaMessage
+      }
+    );
+
+    if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+      throw new Error('Gagal mengunduh media gambar dari WhatsApp.');
+    }
+
+    const mimeType = pendingRequest.imageSource?.message?.imageMessage?.mimetype;
+    const result = await processExifFromBuffer(buffer, mimeType);
+
+    await sock.sendMessage(remoteJid, { text: result.summary }, { quoted: incoming });
+  }
+
+  function getQuotedImageSource(incoming) {
+    const quotedMessage = incoming.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+    if (!quotedMessage?.imageMessage) return null;
+
+    return {
+      key: {
+        remoteJid: incoming.key.remoteJid,
+        id: incoming.message.extendedTextMessage.contextInfo?.stanzaId,
+        participant: incoming.message.extendedTextMessage.contextInfo?.participant
+      },
+      message: quotedMessage
+    };
+  }
+
   sock.ev.on('messages.upsert', async (msg) => {
     const incoming = msg.messages?.[0];
     if (!incoming || incoming.key.fromMe) return;
@@ -79,12 +144,76 @@ async function startWhatsAppClient() {
       incoming.message?.conversation ||
       incoming.message?.extendedTextMessage?.text ||
       '';
-
-    if (!text) return;
-
     const normalizedText = text.trim();
+    const pendingKey = getPendingKey(incoming);
+    const pendingRequest = pendingExifRequests.get(pendingKey);
+
+    if (pendingRequest && /^ya$/i.test(normalizedText)) {
+      pendingExifRequests.delete(pendingKey);
+      await sock.sendMessage(
+        remoteJid,
+        { text: '⏳ Permintaan diproses. Sistem sedang mengekstrak metadata EXIF gambar Anda.' },
+        { quoted: incoming }
+      );
+
+      try {
+        await processPendingExif(remoteJid, incoming, pendingRequest);
+      } catch (error) {
+        logger.error({ err: error }, 'Gagal memproses EXIF');
+        await sock.sendMessage(
+          remoteJid,
+          {
+            text: [
+              '❌ *Analisis Metadata Gambar*',
+              'Proses EXIF gagal dijalankan.',
+              `Detail: ${error?.message || 'Terjadi kesalahan tidak terduga.'}`
+            ].join('\n')
+          },
+          { quoted: incoming }
+        );
+      }
+      return;
+    }
+
+    if (pendingRequest && /^tidak$/i.test(normalizedText)) {
+      pendingExifRequests.delete(pendingKey);
+      await sock.sendMessage(
+        remoteJid,
+        { text: 'Permintaan pemrosesan metadata dibatalkan sesuai instruksi Anda.' },
+        { quoted: incoming }
+      );
+      return;
+    }
+
     const sherlockPrefix = `${env.BOT_PREFIX}sherlock`;
     const holehePrefix = `${env.BOT_PREFIX}holehe`;
+    const exifPrefix = `${env.BOT_PREFIX}exif`;
+
+    if (incoming.message?.imageMessage) {
+      await askExifConfirmation(remoteJid, incoming, incoming);
+      return;
+    }
+
+    if (!normalizedText) return;
+
+    if (normalizedText.toLowerCase().startsWith(exifPrefix.toLowerCase())) {
+      const quotedImageSource = getQuotedImageSource(incoming);
+      if (!quotedImageSource) {
+        await sock.sendMessage(
+          remoteJid,
+          {
+            text: [
+              'Untuk memproses EXIF, silakan kirim gambar langsung atau reply gambar dengan perintah *!exif*.'
+            ].join('\n')
+          },
+          { quoted: incoming }
+        );
+        return;
+      }
+
+      await askExifConfirmation(remoteJid, incoming, quotedImageSource);
+      return;
+    }
 
     if (normalizedText.toLowerCase().startsWith(sherlockPrefix.toLowerCase())) {
       const argsText = normalizedText.slice(sherlockPrefix.length).trim();
