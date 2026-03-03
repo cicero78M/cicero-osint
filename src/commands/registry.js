@@ -146,12 +146,19 @@ async function handleCommand(text) {
         error: error?.stack || error?.message || String(error)
       });
 
+      const isRateLimited = error?.code === 'RATE_LIMITED';
+      const statusMessage = isRateLimited
+        ? `Status: *${error.message || 'Instagram membatasi permintaan (HTTP 429).*'}`
+        : 'Status: *Proses selesai dengan kegagalan*';
+
       return [
         '❌ *Informasi Proses Instaloader*',
         `Target username: *${username || '-'}*`,
-        'Status: *Proses selesai dengan kegagalan*',
+        statusMessage,
         '',
-        'Silakan coba kembali. Jika kendala berulang, mohon hubungi operator untuk pemeriksaan log server.'
+        isRateLimited
+          ? 'Silakan tunggu sampai jeda rate limit selesai, lalu jalankan kembali perintah.'
+          : 'Silakan coba kembali. Jika kendala berulang, mohon hubungi operator untuk pemeriksaan log server.'
       ].join('\n');
     }
   }
