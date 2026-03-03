@@ -9,6 +9,7 @@ const logger = P({ level: 'info' });
 
 let baileys;
 const pendingExifRequests = new Map();
+const EXIF_CONFIRMATION_TTL_MS = env.EXIF_CONFIRMATION_TTL_MS;
 
 async function loadBaileys() {
   if (!baileys) {
@@ -48,6 +49,9 @@ async function startWhatsAppClient() {
   });
 
 
+  clearPendingExifRequests('startup');
+  const pendingExifSweepInterval = setInterval(evictExpiredPendingExifRequests, Math.min(EXIF_CONFIRMATION_TTL_MS, 60000));
+
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
@@ -57,10 +61,13 @@ async function startWhatsAppClient() {
     }
 
     if (connection === 'open') {
+      clearPendingExifRequests('connection-open');
       logger.info('WhatsApp connected');
     }
 
     if (connection === 'close') {
+      clearInterval(pendingExifSweepInterval);
+      clearPendingExifRequests('connection-close');
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
       logger.warn({ statusCode, shouldReconnect }, 'WhatsApp disconnected');
@@ -75,6 +82,23 @@ async function startWhatsAppClient() {
     const remoteJid = message?.key?.remoteJid || '-';
     const participant = message?.key?.participant || remoteJid;
     return `${remoteJid}:${participant}`;
+  }
+
+  function clearPendingExifRequests(reason) {
+    if (pendingExifRequests.size > 0) {
+      logger.info({ reason, cleared: pendingExifRequests.size }, 'Membersihkan pending EXIF requests');
+      pendingExifRequests.clear();
+    }
+  }
+
+  function evictExpiredPendingExifRequests() {
+    const now = Date.now();
+
+    for (const [key, request] of pendingExifRequests.entries()) {
+      if (!request?.createdAt || now - request.createdAt > EXIF_CONFIRMATION_TTL_MS) {
+        pendingExifRequests.delete(key);
+      }
+    }
   }
 
   async function askExifConfirmation(remoteJid, incoming, imageSource) {
@@ -145,8 +169,23 @@ async function startWhatsAppClient() {
       incoming.message?.extendedTextMessage?.text ||
       '';
     const normalizedText = text.trim();
+    evictExpiredPendingExifRequests();
     const pendingKey = getPendingKey(incoming);
     const pendingRequest = pendingExifRequests.get(pendingKey);
+
+    if (!pendingRequest && /^(ya|tidak)$/i.test(normalizedText)) {
+      await sock.sendMessage(
+        remoteJid,
+        {
+          text: [
+            '⌛ Permintaan EXIF sebelumnya sudah kedaluwarsa atau tidak ditemukan.',
+            'Silakan kirim ulang gambar atau reply gambar dengan perintah *!exif* untuk memulai lagi.'
+          ].join('\n')
+        },
+        { quoted: incoming }
+      );
+      return;
+    }
 
     if (pendingRequest && /^ya$/i.test(normalizedText)) {
       pendingExifRequests.delete(pendingKey);
