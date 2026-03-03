@@ -27,11 +27,13 @@ npm install
 cp .env.example .env
 ```
 
-## 3) Install Sherlock
+## 3) Install OSINT dependencies (Python tools)
 
 ```bash
 ./scripts/setup_sherlock.sh
 ```
+
+Script ini akan menginstal Sherlock, Holehe, Maigret, theHarvester, dan Infoga ke `.venv`.
 
 Lalu ubah `.env` agar command Sherlock, Holehe, Maigret, theHarvester, dan Infoga memakai virtualenv (default binary):
 
@@ -43,7 +45,7 @@ THEHARVESTER_CMD=./.venv/bin/theHarvester
 INFOGA_CMD=./.venv/bin/infoga
 ```
 
-Nilai di atas harus sama dengan output `Final command (.env)` dari `./scripts/setup_sherlock.sh` agar tidak terjadi instruksi campur untuk operator.
+Nilai di atas harus sama dengan output `Final command (.env)` dari `./scripts/setup_sherlock.sh` agar preflight saat startup tidak gagal karena binary tidak ditemukan.
 
 
 Jika lokasi executable EXIFTool berbeda dari default, set override pada `.env`:
