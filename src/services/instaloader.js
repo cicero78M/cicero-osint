@@ -27,6 +27,7 @@ async function runInstaloader(rawUsername) {
 
   const outputFile = path.join(reportDir, `instaloader-${username}-${ts}.txt`);
   const { bin, args } = splitCmd(env.INSTALOADER_CMD);
+  const resolvedBin = path.isAbsolute(bin) ? bin : path.resolve(process.cwd(), bin);
   const finalArgs = [
     ...args,
     '--no-pictures',
@@ -38,36 +39,47 @@ async function runInstaloader(rawUsername) {
   ];
 
   // eslint-disable-next-line no-console
-  console.info('[instaloader] memulai eksekusi', { username, bin, args: finalArgs, reportDir, outputFile });
+  console.info('[instaloader] memulai eksekusi', {
+    username,
+    bin: resolvedBin,
+    args: finalArgs,
+    reportDir,
+    outputFile
+  });
 
   const output = await new Promise((resolve, reject) => {
-    execFile(bin, finalArgs, { timeout: env.INSTALOADER_TIMEOUT_MS, cwd: reportDir }, async (error, stdout, stderr) => {
-      const text = `${stdout || ''}\n${stderr || ''}`.trim();
+    execFile(
+      resolvedBin,
+      finalArgs,
+      { timeout: env.INSTALOADER_TIMEOUT_MS, cwd: reportDir },
+      async (error, stdout, stderr) => {
+        const text = `${stdout || ''}\n${stderr || ''}`.trim();
 
-      try {
-        await fs.writeFile(outputFile, text || '[instaloader] tidak ada output');
-      } catch (writeError) {
-        // eslint-disable-next-line no-console
-        console.error('[instaloader] gagal menyimpan output', {
-          username,
-          outputFile,
-          message: writeError.message
-        });
+        try {
+          await fs.writeFile(outputFile, text || '[instaloader] tidak ada output');
+        } catch (writeError) {
+          // eslint-disable-next-line no-console
+          console.error('[instaloader] gagal menyimpan output', {
+            username,
+            outputFile,
+            message: writeError.message
+          });
+        }
+
+        if (error) {
+          // eslint-disable-next-line no-console
+          console.error('[instaloader] eksekusi gagal', {
+            username,
+            message: error.message,
+            output: text
+          });
+          reject(new Error(text || error.message));
+          return;
+        }
+
+        resolve(text);
       }
-
-      if (error) {
-        // eslint-disable-next-line no-console
-        console.error('[instaloader] eksekusi gagal', {
-          username,
-          message: error.message,
-          output: text
-        });
-        reject(new Error(text || error.message));
-        return;
-      }
-
-      resolve(text);
-    });
+    );
   });
 
   // eslint-disable-next-line no-console
