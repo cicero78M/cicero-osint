@@ -4,6 +4,26 @@ const path = require('path');
 const { env } = require('../config/env');
 const { splitCmd } = require('./sherlock');
 
+function parseInstaloaderError(output, fallbackMessage) {
+  const text = String(output || '').trim();
+
+  if (/429\s*-\s*Too Many Requests|429\s+Too Many Requests/i.test(text)) {
+    const retryMatch = text.match(/retried in\s+([^\n.]+)/i);
+    const retryInfo = retryMatch ? retryMatch[1].trim() : null;
+    const message = retryInfo
+      ? `Instagram membatasi permintaan (HTTP 429). Coba lagi dalam ${retryInfo}.`
+      : 'Instagram membatasi permintaan (HTTP 429). Coba lagi beberapa saat lagi.';
+
+    return { code: 'RATE_LIMITED', message, rawOutput: text };
+  }
+
+  return {
+    code: 'EXEC_FAILED',
+    message: text || fallbackMessage,
+    rawOutput: text
+  };
+}
+
 function sanitizeUsername(input) {
   const username = String(input || '').trim();
   if (!username) throw new Error('Username kosong. Gunakan: !instaloader <username>');
@@ -66,13 +86,19 @@ async function runInstaloader(rawUsername) {
         }
 
         if (error) {
+          const parsedError = parseInstaloaderError(text, error.message);
           // eslint-disable-next-line no-console
           console.error('[instaloader] eksekusi gagal', {
             username,
-            message: error.message,
-            output: text
+            code: parsedError.code,
+            message: parsedError.message,
+            output: parsedError.rawOutput
           });
-          reject(new Error(text || error.message));
+
+          const wrappedError = new Error(parsedError.message);
+          wrappedError.code = parsedError.code;
+          wrappedError.rawOutput = parsedError.rawOutput;
+          reject(wrappedError);
           return;
         }
 
@@ -100,4 +126,4 @@ async function runInstaloader(rawUsername) {
   };
 }
 
-module.exports = { runInstaloader, sanitizeUsername };
+module.exports = { runInstaloader, sanitizeUsername, parseInstaloaderError };
