@@ -1,6 +1,6 @@
 # CICERO Sherlock WhatsApp Bot (Baileys)
 
-Project ini menjalankan perintah Sherlock, Holehe, Maigret, theHarvester, dan Infoga melalui WhatsApp menggunakan Baileys.
+Project ini menjalankan perintah Sherlock, Holehe, Maigret, dan theHarvester melalui WhatsApp menggunakan Baileys.
 
 ## 1) Prasyarat Server (Ubuntu)
 
@@ -33,76 +33,9 @@ cp .env.example .env
 ./scripts/setup_sherlock.sh
 ```
 
-Script ini akan menginstal Sherlock, Holehe, Maigret, dan Infoga ke `.venv`. Khusus theHarvester diisolasi ke virtualenv terpisah `.venv-theharvester` untuk mencegah konflik dependency dengan Maigret; command yang dipakai aplikasi tetap `./.venv/bin/theHarvester` melalui wrapper.
+Script ini akan menginstal Sherlock, Holehe, dan Maigret ke `.venv`. Khusus theHarvester diisolasi ke virtualenv terpisah `.venv-theharvester` untuk mencegah konflik dependency dengan Maigret; command yang dipakai aplikasi tetap `./.venv/bin/theHarvester` melalui wrapper.
 
 Khusus theHarvester, installer mengambil source resmi dari repository upstream `laramies/theHarvester` melalui pip VCS (`git+https://github.com/laramies/theHarvester.git`). Secara default, script memilih versi `4.9.2` saat Python host >= 3.12, dan otomatis fallback ke `4.6.0` saat Python host < 3.12 (kompatibel Python 3.9+). Anda bisa override dengan `THEHARVESTER_SOURCE_REPO` dan/atau `THEHARVESTER_VERSION` saat eksekusi setup bila diperlukan. Untuk menjaga kompatibilitas Maigret, dependency `aiohttp-socks` di `.venv` dipin ke `<0.11.0` sesuai requirement Maigret. Setelah proses install, script melakukan validasi eksplisit bahwa command `./.venv/bin/theHarvester` (wrapper ke `.venv-theharvester`) benar-benar executable sebelum lanjut ke verifikasi `--help`.
-
-Catatan penting untuk Infoga: package `infoga` tidak tersedia di PyPI, jadi installer memakai source git (`git+https://github.com/robertswin/Infoga.git`) secara default, dengan mode non-interaktif git (`GIT_TERMINAL_PROMPT=0`).
-Jika source `git+https://...` gagal, script otomatis mencoba fallback non-git (arsip publik/codeload) agar tidak bergantung pada `git clone`.
-
-Jika server Anda memakai mirror/private git, override source tetap didukung dengan environment variable berikut saat setup:
-
-Catatan kompatibilitas: repo `robertswin/Infoga` bukan paket pip siap install (tidak memiliki `setup.py`/`pyproject.toml`) dan script utamanya berjalan di Python 2. Installer menyiapkan source + wrapper `./.venv/bin/infoga`; jika host tidak memiliki `python2`/`python2.7`, verifikasi Infoga akan menjadi warning (default `INFOGA_OPTIONAL=true`) dan setup tetap lanjut. Set `INFOGA_OPTIONAL=false` bila Anda ingin setup gagal keras saat Infoga tidak siap.
-
-```bash
-INFOGA_SOURCE='https://<mirror-anda>/Infoga.git' ./scripts/setup_sherlock.sh
-```
-
-Troubleshooting kredensial Infoga:
-
-### Troubleshooting Infoga
-
-1. **Verifikasi source final yang dipakai installer (`INFOGA_SOURCE`)**
-   - Jalankan setup dan perhatikan log source final yang dicoba script (source utama + fallback archive).
-   - Jika perlu memaksa source tertentu, set env secara eksplisit saat eksekusi:
-
-   ```bash
-   INFOGA_SOURCE='https://github.com/robertswin/Infoga.git' ./scripts/setup_sherlock.sh
-   ```
-
-2. **Cek konfigurasi git global yang sering menyebabkan rewrite/auth**
-
-   ```bash
-   git config --global --get-regexp 'url\..*insteadof'
-   git config --global credential.helper
-   ```
-
-   Rule `url.*.insteadof` dapat me-rewrite URL publik (mis. ke host private) sehingga installer meminta auth meskipun source terlihat publik.
-
-3. **Bypass cepat per-eksekusi setup (nonaktifkan prompt git)**
-   - Jalankan installer dengan env non-interaktif git (sesuai implementasi script):
-
-   ```bash
-   GIT_TERMINAL_PROMPT=0 ./scripts/setup_sherlock.sh
-   ```
-
-   Ini mencegah prompt kredensial interaktif menggantung saat ada masalah autentikasi/akses.
-
-4. **Gunakan mirror internal sebagai jalur produksi**
-   - Jika akses GitHub langsung dibatasi oleh kebijakan jaringan/egress, arahkan installer ke mirror internal:
-
-   ```bash
-   INFOGA_SOURCE='https://<mirror-internal-anda>/Infoga.git' ./scripts/setup_sherlock.sh
-   ```
-
-   Pendekatan ini direkomendasikan untuk environment produksi yang wajib lewat repository internal.
-
-Lalu ubah `.env` agar command Sherlock, Holehe, Maigret, theHarvester, dan Infoga memakai virtualenv (default binary):
-
-```env
-SHERLOCK_CMD=./.venv/bin/sherlock
-HOLEHE_CMD=./.venv/bin/holehe
-MAIGRET_CMD=./.venv/bin/maigret
-THEHARVESTER_CMD=./.venv/bin/theHarvester
-THEHARVESTER_SOURCES=crtsh,bing,duckduckgo,yahoo
-THEHARVESTER_LIMIT=500
-THEHARVESTER_DNS_BRUTE=true
-INFOGA_CMD=./.venv/bin/infoga
-INFOGA_OPTIONAL=true
-```
-
-Nilai di atas harus sama dengan output `Final command (.env)` dari `./scripts/setup_sherlock.sh` agar preflight saat startup tidak gagal karena binary tidak ditemukan. Khusus Infoga, startup default tidak memblokir proses saat Infoga tidak siap (`INFOGA_OPTIONAL=true`) dan hanya menulis warning di log.
-
 
 Jika lokasi executable EXIFTool berbeda dari default, set override pada `.env`:
 
@@ -127,7 +60,6 @@ npm start
 - `!holehe <email>`
 - `!maigret <username>`
 - `!theharvester <domain>`
-- `!infoga <email|domain>`
 - `!exif` (reply gambar)
 
 Contoh:
@@ -137,7 +69,6 @@ Contoh:
 !holehe target@email.com
 !maigret johndoe
 !theharvester example.com
-!infoga target@email.com
 ```
 
 ### Tuning theHarvester (default lebih tajam)

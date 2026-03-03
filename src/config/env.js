@@ -30,14 +30,6 @@ const schema = z.object({
     .transform((v) => v === 'true' || v === '1'),
   THEHARVESTER_TIMEOUT_MS: z.coerce.number().int().positive().default(180000),
   THEHARVESTER_MAX_OUTPUT_CHARS: z.coerce.number().int().positive().default(3500),
-  INFOGA_CMD: z.string().default('./.venv/bin/infoga'),
-  INFOGA_OPTIONAL: z
-    .string()
-    .default('true')
-    .transform((v) => v === 'true'),
-  INFOGA_WORKDIR: z.string().default('./runtime/infoga'),
-  INFOGA_TIMEOUT_MS: z.coerce.number().int().positive().default(180000),
-  INFOGA_MAX_OUTPUT_CHARS: z.coerce.number().int().positive().default(3500),
   EXIFTOOL_CMD: z.string().default('exiftool'),
   EXIFTOOL_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
   EXIF_CONFIRMATION_TTL_MS: z.coerce.number().int().positive().default(300000),
@@ -55,6 +47,5 @@ env.SHERLOCK_WORKDIR = resolveFromCwd(env.SHERLOCK_WORKDIR);
 env.HOLEHE_WORKDIR = resolveFromCwd(env.HOLEHE_WORKDIR);
 env.MAIGRET_WORKDIR = resolveFromCwd(env.MAIGRET_WORKDIR);
 env.THEHARVESTER_WORKDIR = resolveFromCwd(env.THEHARVESTER_WORKDIR);
-env.INFOGA_WORKDIR = resolveFromCwd(env.INFOGA_WORKDIR);
 
 module.exports = { env };

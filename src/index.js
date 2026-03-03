@@ -37,8 +37,8 @@ async function verifyCommand(command, name, checks) {
 async function bootstrap() {
   await fs.mkdir(env.SHERLOCK_WORKDIR, { recursive: true });
   await fs.mkdir(env.HOLEHE_WORKDIR, { recursive: true });
+  await fs.mkdir(env.MAIGRET_WORKDIR, { recursive: true });
   await fs.mkdir(env.THEHARVESTER_WORKDIR, { recursive: true });
-  await fs.mkdir(env.INFOGA_WORKDIR, { recursive: true });
 
   const requiredChecks = [
     { command: env.SHERLOCK_CMD, name: 'sherlock', checks: [['--version'], ['--help']] },
@@ -61,16 +61,6 @@ async function bootstrap() {
     );
   }
 
-  if (env.INFOGA_OPTIONAL) {
-    try {
-      await verifyCommand(env.INFOGA_CMD, 'infoga', [['--help'], ['-h']]);
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn('Infoga preflight gagal. Service tetap jalan karena INFOGA_OPTIONAL=true. Detail:', error?.message || error);
-    }
-  } else {
-    await verifyCommand(env.INFOGA_CMD, 'infoga', [['--help'], ['-h']]);
-  }
 
   await startWhatsAppClient();
 }
