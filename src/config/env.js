@@ -22,6 +22,12 @@ const schema = z.object({
   MAIGRET_MAX_OUTPUT_CHARS: z.coerce.number().int().positive().default(3500),
   THEHARVESTER_CMD: z.string().default('./.venv/bin/theHarvester'),
   THEHARVESTER_WORKDIR: z.string().default('./runtime/theharvester'),
+  THEHARVESTER_SOURCES: z.string().default('crtsh,bing,duckduckgo,yahoo'),
+  THEHARVESTER_LIMIT: z.coerce.number().int().positive().default(500),
+  THEHARVESTER_DNS_BRUTE: z
+    .string()
+    .default('true')
+    .transform((v) => v === 'true' || v === '1'),
   THEHARVESTER_TIMEOUT_MS: z.coerce.number().int().positive().default(180000),
   THEHARVESTER_MAX_OUTPUT_CHARS: z.coerce.number().int().positive().default(3500),
   INFOGA_CMD: z.string().default('./.venv/bin/infoga'),
