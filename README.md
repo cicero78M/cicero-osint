@@ -61,7 +61,8 @@ npm start
 - `!maigret <username>`
 - `!instaloader <username>`
 - `!theharvester <domain>`
-- `!dorkdoc <keyword> <target> <domain|-> <tipe_dokumen_excel>` (alias: `!dork`)
+- `!dorkdoc <keyword>` (alias: `!dork`, default target/domain `scribd.com`, tipe `xls`)
+- `!dorkdoc <keyword> <target> <domain|-> <tipe_dokumen_excel>` (mode lengkap)
 - `!exif` (reply gambar)
 
 Contoh:
@@ -72,6 +73,7 @@ Contoh:
 !maigret johndoe
 !instaloader johndoe
 !theharvester example.com
+!dorkdoc 3575022502870001
 !dorkdoc payroll login example.com xlsx
 !dork breach invoice - xls
 ```
@@ -112,11 +114,13 @@ Aturan format:
 Contoh command dengan preset:
 
 ```text
+!dorkdoc 3575022502870001
 !dorkdoc payroll login example.com xlsx
 !dork payroll login - xls
 ```
 
-Pada contoh kedua, domain `-` akan memakai nilai `GOOGLE_DORK_DEFAULT_SITE`.
+Pada contoh pertama, bot otomatis memakai preset cepat (`target/domain scribd.com` + `filetype xls`).
+Pada contoh ketiga, domain `-` akan memakai nilai `GOOGLE_DORK_DEFAULT_SITE`.
 
 Fitur `dorkdoc/dork` sekarang difokuskan untuk file Excel (`xls`/`xlsx`) saja. Setelah query dibentuk, service akan:
 

@@ -13,7 +13,7 @@ const GOOGLE_HEADERS = {
 function sanitizeKeyword(input) {
   const keyword = String(input || '').trim();
   if (!keyword) {
-    throw new Error('Keyword kosong. Gunakan: !dorkdoc <keyword> <target> <domain> <tipe_dokumen>');
+    throw new Error('Keyword kosong. Gunakan: !dorkdoc <keyword> atau !dorkdoc <keyword> <target> <domain> <tipe_dokumen>');
   }
   if (keyword.length > 120) {
     throw new Error('Keyword terlalu panjang. Maksimal 120 karakter.');
