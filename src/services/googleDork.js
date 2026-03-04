@@ -197,16 +197,16 @@ async function fetchGoogleResultUrls(query, fileType, maxResults) {
 
   const uniqueUrls = [...new Set(resultUrls)];
   if (uniqueUrls.length === 0) {
-    return { links: [], attempts };
+    return { links: [], attempts, totalDiscovered: 0 };
   }
 
   if (!fileType) {
-    return { links: uniqueUrls.slice(0, maxResults), attempts };
+    return { links: uniqueUrls.slice(0, maxResults), attempts, totalDiscovered: uniqueUrls.length };
   }
 
   const matched = uniqueUrls.filter((url) => matchesFileType(url, fileType));
   const remaining = uniqueUrls.filter((url) => !matchesFileType(url, fileType));
-  return { links: [...matched, ...remaining].slice(0, maxResults), attempts };
+  return { links: [...matched, ...remaining].slice(0, maxResults), attempts, totalDiscovered: uniqueUrls.length };
 }
 
 async function fetchUrlBody(url) {
@@ -301,13 +301,14 @@ function buildRelevantRows({ rows, keyword, target, sourceUrl }) {
   return extracted;
 }
 
-function formatProfessionalReport({ query, searchUrl, links, extractedRows, fileType, maxResults }) {
+function formatProfessionalReport({ query, searchUrl, links, extractedRows, fileType, maxResults, totalDiscovered }) {
   const lines = [
     'Laporan Google Dork',
     `Query: ${query}`,
     `URL: ${searchUrl}`,
     '',
     `Filter file: ${fileType || 'tanpa filter filetype'}`,
+    `Jumlah URL didapat dari Google: ${totalDiscovered}`,
     `Jumlah URL yang diproses: ${links.length} (maks konfigurasi: ${maxResults})`,
     'Daftar URL hasil pencarian:'
   ];
@@ -363,9 +364,9 @@ async function runGoogleDork({ keyword: rawKeyword, target: rawTarget, domain: r
   logStep(`Query berhasil dibentuk: ${query}`);
 
   logStep('Mengambil URL hasil dari Google Search.');
-  const { links, attempts } = await fetchGoogleResultUrls(query, fileType, maxResults);
+  const { links, attempts, totalDiscovered } = await fetchGoogleResultUrls(query, fileType, maxResults);
   logStep(`Strategi ekstraksi URL Google: ${attempts.join(', ') || '-'}`);
-  logStep(`Ditemukan ${links.length} URL hasil untuk diproses.`);
+  logStep(`Ditemukan ${totalDiscovered} URL dari Google, ${links.length} URL dipilih untuk diproses.`);
 
   const extractedRows = [];
   for (const url of links) {
@@ -391,9 +392,10 @@ async function runGoogleDork({ keyword: rawKeyword, target: rawTarget, domain: r
     fileType,
     query,
     searchUrl,
+    totalDiscovered,
     links,
     processLog,
-    output: formatProfessionalReport({ query, searchUrl, links, extractedRows, fileType, maxResults })
+    output: formatProfessionalReport({ query, searchUrl, links, extractedRows, fileType, maxResults, totalDiscovered })
   };
 }
 
