@@ -194,8 +194,22 @@ function extractGoogleResultUrls(html) {
 }
 
 function detectGoogleBlock(html) {
+  return getGoogleBlockStatus(html) !== '';
+}
+
+function getGoogleBlockStatus(html) {
   const content = String(html || '').toLowerCase();
-  return [
+
+  const isConsentInterstitial =
+    content.includes('before you continue to google search') ||
+    content.includes('consent.google.com') ||
+    (content.includes('gws_rd=ssl') && /<form\b[^>]*>/i.test(content) && content.includes('consent'));
+
+  if (isConsentInterstitial) {
+    return 'consent_interstitial';
+  }
+
+  const isGeneralBlocked = [
     'detected unusual traffic',
     'our systems have detected unusual traffic',
     '/sorry/index',
@@ -203,6 +217,12 @@ function detectGoogleBlock(html) {
     'recaptcha',
     'verify you are human'
   ].some((pattern) => content.includes(pattern));
+
+  if (isGeneralBlocked) {
+    return 'blocked';
+  }
+
+  return '';
 }
 
 async function fetchGoogleResultUrls(query, fileType, maxResults) {
@@ -221,10 +241,11 @@ async function fetchGoogleResultUrls(query, fileType, maxResults) {
     }
 
     const html = await response.text();
-    if (detectGoogleBlock(html)) {
+    const blockStatus = getGoogleBlockStatus(html);
+    if (blockStatus) {
       detectedBlocking = true;
       attempts.push(`${variant.name}:BLOCKED`);
-      diagnostics.push({ variant: variant.name, status: 'blocked', htmlLength: html.length });
+      diagnostics.push({ variant: variant.name, status: blockStatus, htmlLength: html.length });
       continue;
     }
 
@@ -237,6 +258,16 @@ async function fetchGoogleResultUrls(query, fileType, maxResults) {
     });
     attempts.push(`${variant.name}:${resultUrls.length}`);
     if (resultUrls.length > 0) break;
+  }
+
+  const hasDiagnostics = diagnostics.length > 0;
+  const allConsentInterstitial =
+    hasDiagnostics && diagnostics.every((item) => item.status === 'consent_interstitial');
+
+  if (allConsentInterstitial) {
+    throw new Error(
+      'Google mengembalikan halaman consent interstitial pada seluruh varian pencarian (consent_interstitial). Selesaikan consent terlebih dahulu atau gunakan jalur akses yang sudah menyetujui consent Google.'
+    );
   }
 
   if (resultUrls.length === 0 && detectedBlocking) {
@@ -493,5 +524,5 @@ async function runGoogleDork({ keyword: rawKeyword, target: rawTarget, domain: r
 module.exports = {
   runGoogleDork,
   DOCUMENT_TYPES,
-  __testables: { extractGoogleResultUrls, detectGoogleBlock, matchesFileType, summarizeGoogleDiagnostics }
+  __testables: { extractGoogleResultUrls, detectGoogleBlock, getGoogleBlockStatus, matchesFileType, summarizeGoogleDiagnostics }
 };

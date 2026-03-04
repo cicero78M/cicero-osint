@@ -23,6 +23,23 @@ test('detectGoogleBlock should detect captcha/unusual traffic page', () => {
   assert.equal(__testables.detectGoogleBlock('Normal search html without traffic warning'), false);
 });
 
+test('detectGoogleBlock should detect google consent interstitial page', () => {
+  const consentHtml = `
+    <html>
+      <body>
+        <h1>Before you continue to Google Search</h1>
+        <form action="https://consent.google.com/save" method="post">
+          <input type="hidden" name="continue" value="https://www.google.com/search?q=test&gws_rd=ssl" />
+          <button>I agree</button>
+        </form>
+      </body>
+    </html>
+  `;
+
+  assert.equal(__testables.detectGoogleBlock(consentHtml), true);
+  assert.equal(__testables.getGoogleBlockStatus(consentHtml), 'consent_interstitial');
+});
+
 
 test('extractGoogleResultUrls should parse serialized unicode escaped google payload links', () => {
   const html = String.raw`["/url?sa=t\u0026url=https%3A%2F%2Ffiles.example.net%2Fdump.xlsx%3Fdownload%3D1\u0026ved=2ah"]`;
