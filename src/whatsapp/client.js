@@ -6,6 +6,7 @@ const { handleCommand } = require('../commands/registry');
 const { processExifFromBuffer } = require('../services/exif');
 
 const logger = P({ level: 'info' });
+const commandPrefix = String(env.BOT_PREFIX || '!');
 
 let baileys;
 const pendingExifRequests = new Map();
@@ -375,6 +376,13 @@ async function startWhatsAppClient() {
       incoming.message?.extendedTextMessage?.text ||
       '';
     const normalizedText = text.trim();
+    const isBotCommand = normalizedText.startsWith(commandPrefix);
+    const commandPayload = isBotCommand ? normalizedText.slice(commandPrefix.length).trim() : '';
+    const [commandName, ...commandArgs] = commandPayload.split(/\s+/);
+    const normalizedCommandName = (commandName || '').toLowerCase();
+    const commandArgText = commandArgs.join(' ').trim();
+    const hasImageMessage = Boolean(incoming.message?.imageMessage);
+    const hasImageDocumentMessage = isImageDocument(incoming.message?.documentMessage);
     evictExpiredPendingExifRequests();
     const pendingKey = getPendingKey(incoming);
     const pendingRequest = pendingExifRequests.get(pendingKey);
@@ -386,7 +394,7 @@ async function startWhatsAppClient() {
         {
           text: [
             '⌛ Permintaan EXIF sebelumnya sudah kedaluwarsa atau tidak ditemukan.',
-            'Silakan kirim ulang gambar atau reply gambar dengan perintah *!exif* untuk memulai lagi.'
+            `Silakan kirim ulang gambar atau reply gambar dengan perintah *${commandPrefix}exif* untuk memulai lagi.`
           ].join('\n')
         },
         { quoted: incoming }
@@ -431,11 +439,9 @@ async function startWhatsAppClient() {
       return;
     }
 
-    const sherlockPrefix = `${env.BOT_PREFIX}sherlock`;
-    const holehePrefix = `${env.BOT_PREFIX}holehe`;
-    const exifPrefix = `${env.BOT_PREFIX}exif`;
+    const exifPrefix = `${commandPrefix}exif`;
 
-      if (incoming.message?.imageMessage || isImageDocument(incoming.message?.documentMessage)) {
+      if ((hasImageMessage || hasImageDocumentMessage) && !isBotCommand) {
         await askExifConfirmation(remoteJid, incoming, incoming);
         return;
       }
@@ -449,7 +455,7 @@ async function startWhatsAppClient() {
             remoteJid,
             {
               text: [
-                'Untuk memproses EXIF, silakan kirim gambar (atau dokumen bergambar) langsung, atau reply medianya dengan perintah *!exif*.'
+                `Untuk memproses EXIF, silakan kirim gambar (atau dokumen bergambar) langsung, atau reply medianya dengan perintah *${commandPrefix}exif*.`
               ].join('\n')
             },
             { quoted: incoming }
@@ -461,62 +467,60 @@ async function startWhatsAppClient() {
         return;
       }
 
-      if (normalizedText.toLowerCase().startsWith(sherlockPrefix.toLowerCase())) {
-        const argsText = normalizedText.slice(sherlockPrefix.length).trim();
-        const username = argsText || '-';
-
-      await sock.sendMessage(
-        remoteJid,
-        {
-          text: [
-            '🔔 *Informasi Proses Sherlock*',
-            `Target username: *${username}*`,
-            'Status: *Memulai proses eksekusi di server*'
-          ].join('\n')
+      const commandNotifications = {
+        sherlock: {
+          title: 'Sherlock',
+          targetLabel: 'username',
+          progressText: 'Sedang melakukan proses pencarian OSINT'
         },
-        { quoted: incoming }
-      );
-
-      await sock.sendMessage(
-        remoteJid,
-        {
-          text: [
-            '⏳ *Informasi Proses Sherlock*',
-            `Target username: *${username}*`,
-            'Status: *Sedang melakukan proses pencarian OSINT*'
-          ].join('\n')
+        holehe: {
+          title: 'Holehe',
+          targetLabel: 'email',
+          progressText: 'Sedang melakukan proses pencarian akun terkait email'
         },
-        { quoted: incoming }
-      );
-      }
-
-      if (normalizedText.toLowerCase().startsWith(holehePrefix.toLowerCase())) {
-        const argsText = normalizedText.slice(holehePrefix.length).trim();
-        const email = argsText || '-';
-
-      await sock.sendMessage(
-        remoteJid,
-        {
-          text: [
-            '🔔 *Informasi Proses Holehe*',
-            `Target email: *${email}*`,
-            'Status: *Memulai proses eksekusi di server*'
-          ].join('\n')
+        maigret: {
+          title: 'Maigret',
+          targetLabel: 'username',
+          progressText: 'Sedang melakukan proses enumerasi akun OSINT'
         },
-        { quoted: incoming }
-      );
-
-      await sock.sendMessage(
-        remoteJid,
-        {
-          text: [
-            '⏳ *Informasi Proses Holehe*',
-            `Target email: *${email}*`,
-            'Status: *Sedang melakukan proses pencarian akun terkait email*'
-          ].join('\n')
+        instaloader: {
+          title: 'Instaloader',
+          targetLabel: 'username',
+          progressText: 'Sedang melakukan proses pengambilan data profil Instagram'
         },
-        { quoted: incoming }
-      );
+        theharvester: {
+          title: 'theHarvester',
+          targetLabel: 'domain',
+          progressText: 'Sedang melakukan proses pengumpulan data OSINT domain'
+        }
+      };
+
+      const notification = commandNotifications[normalizedCommandName];
+      if (notification) {
+        const targetValue = commandArgText || '-';
+        await sock.sendMessage(
+          remoteJid,
+          {
+            text: [
+              `🔔 *Informasi Proses ${notification.title}*`,
+              `Target ${notification.targetLabel}: *${targetValue}*`,
+              'Status: *Memulai proses eksekusi di server*'
+            ].join('\n')
+          },
+          { quoted: incoming }
+        );
+
+        await sock.sendMessage(
+          remoteJid,
+          {
+            text: [
+              `⏳ *Informasi Proses ${notification.title}*`,
+              `Target ${notification.targetLabel}: *${targetValue}*`,
+              `Status: *${notification.progressText}*`
+            ].join('\n')
+          },
+          { quoted: incoming }
+        );
       }
 
       const response = await handleCommand(text);
