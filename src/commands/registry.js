@@ -17,8 +17,9 @@ function getHelpMessage() {
     `${env.BOT_PREFIX}maigret <username>`,
     `${env.BOT_PREFIX}instaloader <username>`,
     `${env.BOT_PREFIX}theharvester <domain>`,
+    `${env.BOT_PREFIX}dorkdoc <keyword> (default: target/domain scribd.com, tipe xls)`,
+    `${env.BOT_PREFIX}dork <keyword> (default: target/domain scribd.com, tipe xls)`,
     `${env.BOT_PREFIX}dorkdoc <keyword> <target> <domain|-> <tipe_dokumen>`,
-    `${env.BOT_PREFIX}dork <keyword> <target> <domain|-> <tipe_dokumen>`,
     `${env.BOT_PREFIX}exif (reply gambar)`,
     `${env.BOT_PREFIX}help`,
     '',
@@ -173,13 +174,19 @@ async function handleCommand(text) {
 
 
   if (command === 'dorkdoc' || command === 'dork') {
-    const [keyword, target, domain, fileType, ...extra] = rest;
+    const [keyword, targetInput, domainInput, fileTypeInput, ...extra] = rest;
+
+    const useDefaultScribdPreset = rest.length === 1;
+    const target = useDefaultScribdPreset ? 'scribd.com' : targetInput;
+    const domain = useDefaultScribdPreset ? 'scribd.com' : domainInput;
+    const fileType = useDefaultScribdPreset ? 'xls' : fileTypeInput;
 
     if (!keyword || !target || !domain || !fileType || extra.length > 0) {
       return [
         `❌ *Informasi Proses Google Dork*`,
         'Status: *Argumen tidak lengkap atau format tidak valid*',
         '',
+        `Format cepat: ${env.BOT_PREFIX}dorkdoc <keyword> (otomatis target/domain scribd.com + file xls)`,
         `Gunakan format: ${env.BOT_PREFIX}dorkdoc <keyword> <target> <domain|-> <tipe_dokumen>`,
         `Alias: ${env.BOT_PREFIX}dork <keyword> <target> <domain|-> <tipe_dokumen>`,
         `Tipe dokumen preset: ${DOCUMENT_TYPES.join(', ')}`,
