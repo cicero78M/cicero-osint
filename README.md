@@ -61,8 +61,8 @@ npm start
 - `!maigret <username>`
 - `!instaloader <username>`
 - `!theharvester <domain>`
-- `!dorkdoc <keyword>` (alias: `!dork`, default target/domain `scribd.com`, tipe `xls`)
-- `!dorkdoc <keyword> <target> <domain|-> <tipe_dokumen_excel>` (mode lengkap)
+- `!dorkdoc <keyword>` (alias: `!dork`, mode cepat pencarian luas tanpa batasan filetype)
+- `!dorkdoc <keyword> <target|-> <domain|-> <tipe_dokumen|->` (mode lengkap)
 - `!exif` (reply gambar)
 
 Contoh:
@@ -74,8 +74,8 @@ Contoh:
 !instaloader johndoe
 !theharvester example.com
 !dorkdoc 3575022502870001
-!dorkdoc payroll login example.com xlsx
-!dork breach invoice - xls
+!dorkdoc payroll login example.com pdf
+!dork breach invoice - -
 ```
 
 ### Tuning theHarvester (default lebih tajam)
@@ -100,33 +100,35 @@ THEHARVESTER_DNS_BRUTE=true
 Preset tipe dokumen dan default domain Google Dork dikontrol via environment variable berikut:
 
 ```env
-GOOGLE_DORK_DOC_TYPES=xls,xlsx
+GOOGLE_DORK_DOC_TYPES=pdf,doc,docx,xls,xlsx,ppt,pptx
 GOOGLE_DORK_DEFAULT_SITE=
+GOOGLE_DORK_MAX_RESULTS=20
 ```
 
 Aturan format:
 
 - `GOOGLE_DORK_DOC_TYPES` memakai format CSV.
 - Setiap item otomatis dinormalisasi (trim, lowercase, item kosong dibuang).
-- Contoh input yang tetap valid: `XLS, ,XLSX` → `xls,xlsx`.
+- Contoh input yang tetap valid: `PDF, ,DOCX` → `pdf,docx`.
 - `GOOGLE_DORK_DEFAULT_SITE` opsional. Jika diisi, command `!dorkdoc` bisa memakai `-` pada argumen domain agar otomatis pakai default site.
+- `GOOGLE_DORK_MAX_RESULTS` menentukan jumlah maksimum URL hasil Google yang diproses (tidak dibatasi 3).
 
 Contoh command dengan preset:
 
 ```text
 !dorkdoc 3575022502870001
-!dorkdoc payroll login example.com xlsx
-!dork payroll login - xls
+!dorkdoc payroll login example.com pdf
+!dork payroll login - -
 ```
 
-Pada contoh pertama, bot otomatis memakai preset cepat (`target/domain scribd.com` + `filetype xls`).
-Pada contoh ketiga, domain `-` akan memakai nilai `GOOGLE_DORK_DEFAULT_SITE`.
+Pada contoh pertama, bot otomatis memakai preset cepat (pencarian luas tanpa filter filetype).
+Pada mode lengkap, isi `-` pada `target`/`domain` jika ingin menonaktifkan filter tersebut. Domain `-` akan memakai `GOOGLE_DORK_DEFAULT_SITE` bila variabel itu di-set.
 
-Fitur `dorkdoc/dork` sekarang difokuskan untuk file Excel (`xls`/`xlsx`) saja. Setelah query dibentuk, service akan:
+Fitur `dorkdoc/dork` sekarang mendukung pencarian lebih luas lintas tipe dokumen. Setelah query dibentuk, service akan:
 
-1. Mengambil 3 hasil teratas dari Google Search yang mengarah ke file excel.
-2. Mengunduh dan mengekstrak konten sheet pertama setiap file.
-3. Menggabungkan hasil dan menampilkan hanya baris yang relevan dengan keyword/target dalam format laporan teks profesional.
+1. Mengambil URL hasil Google hingga batas `GOOGLE_DORK_MAX_RESULTS` (diprioritaskan sesuai filetype bila filetype diisi).
+2. Mengunduh setiap URL hasil, lalu mencoba ekstraksi konten berdasarkan tipe data (Excel/CSV/text/HTML/JSON/XML).
+3. Menyaring data relevan berdasarkan keyword/target dan menampilkan ringkasan hasil dalam format laporan teks profesional.
 
 Contoh manual run di server:
 

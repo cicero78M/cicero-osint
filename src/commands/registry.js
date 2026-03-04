@@ -17,16 +17,16 @@ function getHelpMessage() {
     `${env.BOT_PREFIX}maigret <username>`,
     `${env.BOT_PREFIX}instaloader <username>`,
     `${env.BOT_PREFIX}theharvester <domain>`,
-    `${env.BOT_PREFIX}dorkdoc <keyword> (default: target/domain scribd.com, tipe xls)`,
-    `${env.BOT_PREFIX}dork <keyword> (default: target/domain scribd.com, tipe xls)`,
-    `${env.BOT_PREFIX}dorkdoc <keyword> <target> <domain|-> <tipe_dokumen>`,
+    `${env.BOT_PREFIX}dorkdoc <keyword> (pencarian luas tanpa batasan filetype)`,
+    `${env.BOT_PREFIX}dork <keyword> (pencarian luas tanpa batasan filetype)`,
+    `${env.BOT_PREFIX}dorkdoc <keyword> <target|-> <domain|-> <tipe_dokumen>`,
     `${env.BOT_PREFIX}exif (reply gambar)`,
     `${env.BOT_PREFIX}help`,
     '',
     `Tipe dokumen preset: ${DOCUMENT_TYPES.join(', ')}`,
     env.GOOGLE_DORK_DEFAULT_SITE
       ? `Default domain (opsional): ${env.GOOGLE_DORK_DEFAULT_SITE} (pakai '-' jika ingin default)`
-      : 'Default domain (opsional): belum di-set, isi argumen domain wajib'
+      : 'Default domain (opsional): belum di-set'
   ].join('\n');
 }
 
@@ -176,35 +176,39 @@ async function handleCommand(text) {
   if (command === 'dorkdoc' || command === 'dork') {
     const [keyword, targetInput, domainInput, fileTypeInput, ...extra] = rest;
 
-    const useDefaultScribdPreset = rest.length === 1;
-    const target = useDefaultScribdPreset ? 'scribd.com' : targetInput;
-    const domain = useDefaultScribdPreset ? 'scribd.com' : domainInput;
-    const fileType = useDefaultScribdPreset ? 'xls' : fileTypeInput;
+    const useWidePreset = rest.length === 1;
+    const target = useWidePreset ? '' : targetInput;
+    const domain = useWidePreset ? '' : domainInput;
+    const fileType = useWidePreset ? '' : fileTypeInput;
 
-    if (!keyword || !target || !domain || !fileType || extra.length > 0) {
+    const isInvalidWideMode = useWidePreset && (!keyword || extra.length > 0);
+    const isInvalidFullMode = !useWidePreset && (!keyword || !fileTypeInput || extra.length > 0);
+
+    if (isInvalidWideMode || isInvalidFullMode) {
       return [
         `❌ *Informasi Proses Google Dork*`,
         'Status: *Argumen tidak lengkap atau format tidak valid*',
         '',
-        `Format cepat: ${env.BOT_PREFIX}dorkdoc <keyword> (otomatis target/domain scribd.com + file xls)`,
-        `Gunakan format: ${env.BOT_PREFIX}dorkdoc <keyword> <target> <domain|-> <tipe_dokumen>`,
-        `Alias: ${env.BOT_PREFIX}dork <keyword> <target> <domain|-> <tipe_dokumen>`,
+        `Format cepat: ${env.BOT_PREFIX}dorkdoc <keyword> (pencarian luas tanpa filetype)`,
+        `Gunakan format: ${env.BOT_PREFIX}dorkdoc <keyword> <target|-> <domain|-> <tipe_dokumen|->`,
+        `Alias: ${env.BOT_PREFIX}dork <keyword> <target|-> <domain|-> <tipe_dokumen|->`,
         `Tipe dokumen preset: ${DOCUMENT_TYPES.join(', ')}`,
         env.GOOGLE_DORK_DEFAULT_SITE
           ? `Gunakan '-' pada domain untuk memakai default: ${env.GOOGLE_DORK_DEFAULT_SITE}`
-          : 'Jika default domain belum di-set, isi argumen domain wajib.'
+          : `Gunakan '-' pada target/domain jika ingin pencarian lebih luas tanpa filter tambahan.`
       ].join('\n');
     }
 
     try {
-      const normalizedDomain = domain === '-' ? '' : domain;
-      const result = await runGoogleDork({ keyword, target, domain: normalizedDomain, fileType });
+      const normalizedTarget = target === '-' ? '' : target;
+      const normalizedDomain = domain === '-' ? (env.GOOGLE_DORK_DEFAULT_SITE || '') : domain;
+      const result = await runGoogleDork({ keyword, target: normalizedTarget, domain: normalizedDomain, fileType });
       return [
         '✅ *Informasi Proses Google Dork*',
         `Keyword: *${result.keyword}*`,
-        `Target: *${result.target}*`,
-        `Domain: *${result.domain}*`,
-        `Tipe dokumen: *${result.fileType}*`,
+        `Target: *${result.target || '-'}*`,
+        `Domain: *${result.domain || '-'}*`,
+        `Tipe dokumen: *${result.fileType || '-'}*`,
         'Status: *Query berhasil dibuat*',
         '',
         '*Ringkasan hasil eksekusi:*',
