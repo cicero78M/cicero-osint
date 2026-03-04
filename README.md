@@ -61,7 +61,7 @@ npm start
 - `!maigret <username>`
 - `!instaloader <username>`
 - `!theharvester <domain>`
-- `!dorkdoc <keyword> <target> <domain|-> <tipe_dokumen>` (alias: `!dork`)
+- `!dorkdoc <keyword> <target> <domain|-> <tipe_dokumen_excel>` (alias: `!dork`)
 - `!exif` (reply gambar)
 
 Contoh:
@@ -72,8 +72,8 @@ Contoh:
 !maigret johndoe
 !instaloader johndoe
 !theharvester example.com
-!dorkdoc payroll login example.com pdf
-!dork breach invoice - xlsx
+!dorkdoc payroll login example.com xlsx
+!dork breach invoice - xls
 ```
 
 ### Tuning theHarvester (default lebih tajam)
@@ -98,7 +98,7 @@ THEHARVESTER_DNS_BRUTE=true
 Preset tipe dokumen dan default domain Google Dork dikontrol via environment variable berikut:
 
 ```env
-GOOGLE_DORK_DOC_TYPES=pdf,doc,docx,xls,xlsx,ppt,pptx
+GOOGLE_DORK_DOC_TYPES=xls,xlsx
 GOOGLE_DORK_DEFAULT_SITE=
 ```
 
@@ -106,17 +106,23 @@ Aturan format:
 
 - `GOOGLE_DORK_DOC_TYPES` memakai format CSV.
 - Setiap item otomatis dinormalisasi (trim, lowercase, item kosong dibuang).
-- Contoh input yang tetap valid: `PDF, docx, ,XLSX` → `pdf,docx,xlsx`.
+- Contoh input yang tetap valid: `XLS, ,XLSX` → `xls,xlsx`.
 - `GOOGLE_DORK_DEFAULT_SITE` opsional. Jika diisi, command `!dorkdoc` bisa memakai `-` pada argumen domain agar otomatis pakai default site.
 
 Contoh command dengan preset:
 
 ```text
-!dorkdoc payroll login example.com pdf
-!dork payroll login - xlsx
+!dorkdoc payroll login example.com xlsx
+!dork payroll login - xls
 ```
 
 Pada contoh kedua, domain `-` akan memakai nilai `GOOGLE_DORK_DEFAULT_SITE`.
+
+Fitur `dorkdoc/dork` sekarang difokuskan untuk file Excel (`xls`/`xlsx`) saja. Setelah query dibentuk, service akan:
+
+1. Mengambil 3 hasil teratas dari Google Search yang mengarah ke file excel.
+2. Mengunduh dan mengekstrak konten sheet pertama setiap file.
+3. Menggabungkan hasil dan menampilkan hanya baris yang relevan dengan keyword/target dalam format laporan teks profesional.
 
 Contoh manual run di server:
 
