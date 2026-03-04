@@ -255,6 +255,7 @@ async function runGoogleDork({ keyword: rawKeyword, target: rawTarget, domain: r
   logStep(`Ditemukan ${links.length} URL hasil untuk diproses.`);
 
   const extractedRows = [];
+  const canAnalyzeExcel = !fileType || EXCEL_TYPES.includes(fileType);
   for (const url of links) {
     logStep(`Mengunduh URL: ${url}`);
     try {
