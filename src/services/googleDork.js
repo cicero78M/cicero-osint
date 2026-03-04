@@ -13,6 +13,15 @@ const GOOGLE_SEARCH_VARIANTS = [
   { name: 'basic', extraParams: '&gbv=1' },
   { name: 'web', extraParams: '&udm=14' }
 ];
+const GOOGLE_FALLBACK_ATTEMPT_LIMIT = 2;
+
+function buildGoogleSearchUrl({ host, query, num, extraParams }) {
+  return `https://${host}/search?q=${encodeURIComponent(query)}&num=${num}&hl=id&safe=off&pws=0${extraParams || ''}`;
+}
+
+function buildUnquotedQuery(query) {
+  return String(query || '').replace(/"([^"]+)"/g, '$1').replace(/\s+/g, ' ').trim();
+}
 
 function sanitizeKeyword(input) {
   const keyword = String(input || '').trim();
@@ -231,33 +240,109 @@ async function fetchGoogleResultUrls(query, fileType, maxResults) {
   let resultUrls = [];
   let detectedBlocking = false;
 
-  for (const variant of GOOGLE_SEARCH_VARIANTS) {
-    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=100&hl=id&safe=off&pws=0${variant.extraParams}`;
+  const runSearchAttempt = async ({ variant, host, queryText, num, stage, fallbackReason }) => {
+    const searchUrl = buildGoogleSearchUrl({ host, query: queryText, num, extraParams: variant.extraParams });
     const response = await fetch(searchUrl, { headers: GOOGLE_HEADERS, redirect: 'follow' });
     if (!response.ok) {
-      attempts.push(`${variant.name}:HTTP_${response.status}`);
-      diagnostics.push({ variant: variant.name, status: 'http_error', httpStatus: response.status });
-      continue;
+      attempts.push(`${stage}:${variant.name}:HTTP_${response.status}`);
+      diagnostics.push({
+        stage,
+        variant: variant.name,
+        host,
+        num,
+        status: 'http_error',
+        httpStatus: response.status,
+        fallbackReason: fallbackReason || ''
+      });
+      return [];
     }
 
     const html = await response.text();
     const blockStatus = getGoogleBlockStatus(html);
     if (blockStatus) {
       detectedBlocking = true;
-      attempts.push(`${variant.name}:BLOCKED`);
-      diagnostics.push({ variant: variant.name, status: blockStatus, htmlLength: html.length });
-      continue;
+      attempts.push(`${stage}:${variant.name}:BLOCKED`);
+      diagnostics.push({
+        stage,
+        variant: variant.name,
+        host,
+        num,
+        status: blockStatus,
+        htmlLength: html.length,
+        fallbackReason: fallbackReason || ''
+      });
+      return [];
     }
 
-    resultUrls = extractGoogleResultUrls(html);
+    const extractedUrls = extractGoogleResultUrls(html);
     diagnostics.push({
+      stage,
       variant: variant.name,
+      host,
+      num,
       status: 'ok',
       htmlLength: html.length,
-      extractedUrlCount: resultUrls.length
+      extractedUrlCount: extractedUrls.length,
+      fallbackReason: fallbackReason || ''
     });
-    attempts.push(`${variant.name}:${resultUrls.length}`);
+    attempts.push(`${stage}:${variant.name}:${extractedUrls.length}`);
+    return extractedUrls;
+  };
+
+  for (const variant of GOOGLE_SEARCH_VARIANTS) {
+    resultUrls = await runSearchAttempt({
+      variant,
+      host: 'www.google.com',
+      queryText: query,
+      num: 100,
+      stage: 'primary'
+    });
     if (resultUrls.length > 0) break;
+  }
+
+  const primaryAttempts = diagnostics.filter((item) => item.stage === 'primary');
+  const shouldRunFallback =
+    resultUrls.length === 0 &&
+    primaryAttempts.length === GOOGLE_SEARCH_VARIANTS.length &&
+    primaryAttempts.every((item) => item.status === 'ok' && Number(item.extractedUrlCount || 0) === 0);
+
+  if (shouldRunFallback) {
+    const fallbackPlans = [
+      {
+        stage: 'fallback_1',
+        host: 'www.google.co.id',
+        num: 20,
+        queryText: query,
+        reason: 'all_primary_variants_ok_but_zero_results'
+      },
+      {
+        stage: 'fallback_2',
+        host: 'www.google.co.id',
+        num: 10,
+        queryText: buildUnquotedQuery(query),
+        reason: 'retry_without_quotes'
+      }
+    ].slice(0, GOOGLE_FALLBACK_ATTEMPT_LIMIT);
+
+    diagnostics.push({
+      stage: 'fallback',
+      variant: 'all',
+      status: 'triggered',
+      fallbackReason: 'all_primary_variants_ok_but_zero_results',
+      plannedAttempts: fallbackPlans.length
+    });
+
+    for (const plan of fallbackPlans) {
+      resultUrls = await runSearchAttempt({
+        variant: GOOGLE_SEARCH_VARIANTS[0],
+        host: plan.host,
+        queryText: plan.queryText,
+        num: plan.num,
+        stage: plan.stage,
+        fallbackReason: plan.reason
+      });
+      if (resultUrls.length > 0) break;
+    }
   }
 
   const hasDiagnostics = diagnostics.length > 0;
@@ -524,5 +609,13 @@ async function runGoogleDork({ keyword: rawKeyword, target: rawTarget, domain: r
 module.exports = {
   runGoogleDork,
   DOCUMENT_TYPES,
-  __testables: { extractGoogleResultUrls, detectGoogleBlock, getGoogleBlockStatus, matchesFileType, summarizeGoogleDiagnostics }
+  __testables: {
+    extractGoogleResultUrls,
+    detectGoogleBlock,
+    getGoogleBlockStatus,
+    matchesFileType,
+    summarizeGoogleDiagnostics,
+    fetchGoogleResultUrls,
+    buildUnquotedQuery
+  }
 };
