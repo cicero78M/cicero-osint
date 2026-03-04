@@ -209,6 +209,8 @@ async function handleCommand(text) {
         `Target: *${result.target || '-'}*`,
         `Domain: *${result.domain || '-'}*`,
         `Tipe dokumen: *${result.fileType || '-'}*`,
+        `Jumlah URL didapat: *${result.totalDiscovered || 0}*`,
+        `Jumlah URL diproses: *${(result.links || []).length}*`,
         'Status: *Query berhasil dibuat*',
         '',
         '*Ringkasan hasil eksekusi:*',
