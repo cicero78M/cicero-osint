@@ -17,12 +17,15 @@ function getHelpMessage() {
     `${env.BOT_PREFIX}maigret <username>`,
     `${env.BOT_PREFIX}instaloader <username>`,
     `${env.BOT_PREFIX}theharvester <domain>`,
-    `${env.BOT_PREFIX}dorkdoc <keyword> <target> <domain> <tipe_dokumen>`,
-    `${env.BOT_PREFIX}dork <keyword> <target> <domain> <tipe_dokumen>`,
+    `${env.BOT_PREFIX}dorkdoc <keyword> <target> <domain|-> <tipe_dokumen>`,
+    `${env.BOT_PREFIX}dork <keyword> <target> <domain|-> <tipe_dokumen>`,
     `${env.BOT_PREFIX}exif (reply gambar)`,
     `${env.BOT_PREFIX}help`,
     '',
-    `Tipe dokumen didukung: ${DOCUMENT_TYPES.join(', ')}`
+    `Tipe dokumen preset: ${DOCUMENT_TYPES.join(', ')}`,
+    env.GOOGLE_DORK_DEFAULT_SITE
+      ? `Default domain (opsional): ${env.GOOGLE_DORK_DEFAULT_SITE} (pakai '-' jika ingin default)`
+      : 'Default domain (opsional): belum di-set, isi argumen domain wajib'
   ].join('\n');
 }
 
@@ -177,14 +180,18 @@ async function handleCommand(text) {
         `❌ *Informasi Proses Google Dork*`,
         'Status: *Argumen tidak lengkap atau format tidak valid*',
         '',
-        `Gunakan format: ${env.BOT_PREFIX}dorkdoc <keyword> <target> <domain> <tipe_dokumen>`,
-        `Alias: ${env.BOT_PREFIX}dork <keyword> <target> <domain> <tipe_dokumen>`,
-        `Tipe dokumen didukung: ${DOCUMENT_TYPES.join(', ')}`
+        `Gunakan format: ${env.BOT_PREFIX}dorkdoc <keyword> <target> <domain|-> <tipe_dokumen>`,
+        `Alias: ${env.BOT_PREFIX}dork <keyword> <target> <domain|-> <tipe_dokumen>`,
+        `Tipe dokumen preset: ${DOCUMENT_TYPES.join(', ')}`,
+        env.GOOGLE_DORK_DEFAULT_SITE
+          ? `Gunakan '-' pada domain untuk memakai default: ${env.GOOGLE_DORK_DEFAULT_SITE}`
+          : 'Jika default domain belum di-set, isi argumen domain wajib.'
       ].join('\n');
     }
 
     try {
-      const result = runGoogleDork({ keyword, target, domain, fileType });
+      const normalizedDomain = domain === '-' ? '' : domain;
+      const result = runGoogleDork({ keyword, target, domain: normalizedDomain, fileType });
       return [
         '✅ *Informasi Proses Google Dork*',
         `Keyword: *${result.keyword}*`,

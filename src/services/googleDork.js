@@ -1,4 +1,6 @@
-const DOCUMENT_TYPES = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'];
+const { env } = require('../config/env');
+
+const DOCUMENT_TYPES = env.GOOGLE_DORK_DOC_TYPES;
 
 function sanitizeKeyword(input) {
   const keyword = String(input || '').trim();
@@ -24,8 +26,11 @@ function sanitizeTarget(input) {
 
 function sanitizeDomain(input) {
   const domain = String(input || '').trim().toLowerCase();
+  if (!domain && env.GOOGLE_DORK_DEFAULT_SITE) {
+    return env.GOOGLE_DORK_DEFAULT_SITE;
+  }
   if (!domain) {
-    throw new Error('Domain kosong. Gunakan: !dorkdoc <keyword> <target> <domain> <tipe_dokumen>');
+    throw new Error('Domain kosong. Gunakan: !dorkdoc <keyword> <target> <domain|-> <tipe_dokumen>');
   }
   if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(domain)) {
     throw new Error('Format domain tidak valid. Contoh: example.com');
@@ -50,7 +55,8 @@ function runGoogleDork({ keyword: rawKeyword, target: rawTarget, domain: rawDoma
   const domain = sanitizeDomain(rawDomain);
   const fileType = sanitizeFileType(rawFileType);
 
-  const query = `site:${domain} intitle:"${target}" "${keyword}" filetype:${fileType}`;
+  const siteDomain = domain || env.GOOGLE_DORK_DEFAULT_SITE;
+  const query = `site:${siteDomain} intitle:"${target}" "${keyword}" filetype:${fileType}`;
   const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 
   return {

@@ -37,6 +37,8 @@ const schema = z.object({
   EXIFTOOL_CMD: z.string().default('exiftool'),
   EXIFTOOL_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
   EXIF_CONFIRMATION_TTL_MS: z.coerce.number().int().positive().default(300000),
+  GOOGLE_DORK_DOC_TYPES: z.string().default('pdf,doc,docx,xls,xlsx,ppt,pptx'),
+  GOOGLE_DORK_DEFAULT_SITE: z.string().default(''),
   WHATSAPP_SEND_QR_TO_TERMINAL: z
     .string()
     .default('true')
@@ -45,6 +47,11 @@ const schema = z.object({
 
 const env = schema.parse(process.env);
 const resolveFromCwd = (targetPath) => path.resolve(process.cwd(), targetPath);
+const parseNormalizedCsv = (value) =>
+  String(value || '')
+    .split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
 
 env.SESSION_DIR = resolveFromCwd(env.SESSION_DIR);
 env.SHERLOCK_WORKDIR = resolveFromCwd(env.SHERLOCK_WORKDIR);
@@ -52,5 +59,10 @@ env.HOLEHE_WORKDIR = resolveFromCwd(env.HOLEHE_WORKDIR);
 env.MAIGRET_WORKDIR = resolveFromCwd(env.MAIGRET_WORKDIR);
 env.INSTALOADER_WORKDIR = resolveFromCwd(env.INSTALOADER_WORKDIR);
 env.THEHARVESTER_WORKDIR = resolveFromCwd(env.THEHARVESTER_WORKDIR);
+env.GOOGLE_DORK_DOC_TYPES = parseNormalizedCsv(env.GOOGLE_DORK_DOC_TYPES);
+if (env.GOOGLE_DORK_DOC_TYPES.length === 0) {
+  env.GOOGLE_DORK_DOC_TYPES = parseNormalizedCsv('pdf,doc,docx,xls,xlsx,ppt,pptx');
+}
+env.GOOGLE_DORK_DEFAULT_SITE = String(env.GOOGLE_DORK_DEFAULT_SITE || '').trim().toLowerCase();
 
 module.exports = { env };
