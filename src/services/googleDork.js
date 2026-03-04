@@ -23,6 +23,13 @@ function buildUnquotedQuery(query) {
   return String(query || '').replace(/"([^"]+)"/g, '$1').replace(/\s+/g, ' ').trim();
 }
 
+function normalizeKeywordForBroadSearch(keyword) {
+  return String(keyword || '')
+    .replace(/[_\-.]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function sanitizeKeyword(input) {
   const keyword = String(input || '').trim();
   if (!keyword) {
@@ -171,6 +178,8 @@ function extractGoogleResultUrls(html) {
   const normalizedForFallback = String(html || '')
     .replace(/\\u003d/gi, '=')
     .replace(/\\u0026/gi, '&')
+    .replace(/\\x3d/gi, '=')
+    .replace(/\\x26/gi, '&')
     .replace(/\\\//g, '/');
 
   const runFallbackExtraction = (source) => {
@@ -397,6 +406,35 @@ function summarizeGoogleDiagnostics(diagnostics) {
     .join('\n');
 }
 
+function buildGoogleDorkQueryPlans({ keyword, target, domain, fileType }) {
+  const queryPlans = [];
+  const pushPlan = (query, reason) => {
+    const cleanedQuery = String(query || '').replace(/\s+/g, ' ').trim();
+    if (!cleanedQuery || queryPlans.some((item) => item.query === cleanedQuery)) return;
+    queryPlans.push({ query: cleanedQuery, reason });
+  };
+
+  const baseParts = [];
+  if (domain) baseParts.push(`site:${domain}`);
+  if (target) baseParts.push(`intitle:"${target}"`);
+
+  const exactKeyword = `"${keyword}"`;
+  const broadKeyword = keyword;
+  const normalizedBroadKeyword = normalizeKeywordForBroadSearch(keyword);
+
+  pushPlan([...baseParts, exactKeyword, fileType ? `filetype:${fileType}` : ''].filter(Boolean).join(' '), 'exact_keyword_phrase');
+  pushPlan([...baseParts, broadKeyword, fileType ? `filetype:${fileType}` : ''].filter(Boolean).join(' '), 'broad_keyword');
+
+  if (normalizedBroadKeyword && normalizedBroadKeyword !== broadKeyword) {
+    pushPlan(
+      [...baseParts, normalizedBroadKeyword, fileType ? `filetype:${fileType}` : ''].filter(Boolean).join(' '),
+      'broad_keyword_separator_normalized'
+    );
+  }
+
+  return queryPlans;
+}
+
 async function fetchUrlBody(url) {
   const response = await fetch(url, { headers: { 'User-Agent': GOOGLE_HEADERS['User-Agent'] } });
   if (!response.ok) {
@@ -544,23 +582,37 @@ async function runGoogleDork({ keyword: rawKeyword, target: rawTarget, domain: r
   const maxResults = Math.max(1, Number(env.GOOGLE_DORK_MAX_RESULTS) || 20);
   logStep('Validasi parameter selesai (keyword, target, domain, tipe dokumen).');
 
-  const queryParts = [];
-  if (domain) {
-    queryParts.push(`site:${domain}`);
-  }
-  if (target) {
-    queryParts.push(`intitle:"${target}"`);
-  }
-  queryParts.push(`"${keyword}"`);
-  if (fileType) {
-    queryParts.push(`filetype:${fileType}`);
-  }
-  const query = queryParts.join(' ');
-  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-  logStep(`Query berhasil dibentuk: ${query}`);
+  const queryPlans = buildGoogleDorkQueryPlans({ keyword, target, domain, fileType });
+  const primaryQueryPlan = queryPlans[0] || { query: `"${keyword}"`, reason: 'fallback_exact_keyword' };
+  logStep(`Query utama berhasil dibentuk: ${primaryQueryPlan.query}`);
+  logStep(
+    `Rencana query Google: ${queryPlans.map((item) => `${item.reason}=>${item.query}`).join(' | ') || primaryQueryPlan.query}`
+  );
 
   logStep('Mengambil URL hasil dari Google Search.');
-  const { links, attempts, totalDiscovered, diagnostics } = await fetchGoogleResultUrls(query, fileType, maxResults);
+  let selectedQueryPlan = primaryQueryPlan;
+  let links = [];
+  let attempts = [];
+  let totalDiscovered = 0;
+  let diagnostics = [];
+
+  for (const plan of queryPlans) {
+    logStep(`Menjalankan query (${plan.reason}): ${plan.query}`);
+    const result = await fetchGoogleResultUrls(plan.query, fileType, maxResults);
+    links = result.links;
+    attempts = result.attempts;
+    totalDiscovered = result.totalDiscovered;
+    diagnostics = result.diagnostics;
+    selectedQueryPlan = plan;
+
+    if (links.length > 0) {
+      logStep(`Query menghasilkan URL, gunakan query (${plan.reason}).`, { discovered: totalDiscovered, selectedLinks: links.length });
+      break;
+    }
+  }
+
+  const query = selectedQueryPlan.query;
+  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
   logStep(`Strategi ekstraksi URL Google: ${attempts.join(', ') || '-'}`);
   logStep(`Ditemukan ${totalDiscovered} URL dari Google, ${links.length} URL dipilih untuk diproses.`, {
     attempts,
@@ -616,6 +668,8 @@ module.exports = {
     matchesFileType,
     summarizeGoogleDiagnostics,
     fetchGoogleResultUrls,
-    buildUnquotedQuery
+    buildUnquotedQuery,
+    normalizeKeywordForBroadSearch,
+    buildGoogleDorkQueryPlans
   }
 };
