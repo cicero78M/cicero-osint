@@ -198,7 +198,7 @@ async function handleCommand(text) {
 
     try {
       const normalizedDomain = domain === '-' ? '' : domain;
-      const result = runGoogleDork({ keyword, target, domain: normalizedDomain, fileType });
+      const result = await runGoogleDork({ keyword, target, domain: normalizedDomain, fileType });
       return [
         '✅ *Informasi Proses Google Dork*',
         `Keyword: *${result.keyword}*`,
