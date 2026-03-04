@@ -39,6 +39,7 @@ const schema = z.object({
   EXIF_CONFIRMATION_TTL_MS: z.coerce.number().int().positive().default(300000),
   GOOGLE_DORK_DOC_TYPES: z.string().default('pdf,doc,docx,xls,xlsx,ppt,pptx'),
   GOOGLE_DORK_DEFAULT_SITE: z.string().default(''),
+  GOOGLE_DORK_MAX_RESULTS: z.coerce.number().int().positive().default(20),
   WHATSAPP_SEND_QR_TO_TERMINAL: z
     .string()
     .default('true')

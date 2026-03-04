@@ -102,6 +102,7 @@ Preset tipe dokumen dan default domain Google Dork dikontrol via environment var
 ```env
 GOOGLE_DORK_DOC_TYPES=pdf,doc,docx,xls,xlsx,ppt,pptx
 GOOGLE_DORK_DEFAULT_SITE=
+GOOGLE_DORK_MAX_RESULTS=20
 ```
 
 Aturan format:
@@ -110,6 +111,7 @@ Aturan format:
 - Setiap item otomatis dinormalisasi (trim, lowercase, item kosong dibuang).
 - Contoh input yang tetap valid: `PDF, ,DOCX` → `pdf,docx`.
 - `GOOGLE_DORK_DEFAULT_SITE` opsional. Jika diisi, command `!dorkdoc` bisa memakai `-` pada argumen domain agar otomatis pakai default site.
+- `GOOGLE_DORK_MAX_RESULTS` menentukan jumlah maksimum URL hasil Google yang diproses (tidak dibatasi 3).
 
 Contoh command dengan preset:
 
@@ -124,9 +126,9 @@ Pada mode lengkap, isi `-` pada `target`/`domain` jika ingin menonaktifkan filte
 
 Fitur `dorkdoc/dork` sekarang mendukung pencarian lebih luas lintas tipe dokumen. Setelah query dibentuk, service akan:
 
-1. Mengambil 3 URL teratas dari hasil Google (diprioritaskan sesuai filetype bila filetype diisi).
-2. Melakukan analisis konten otomatis hanya untuk URL yang terdeteksi sebagai file Excel (`xls`/`xlsx`).
-3. Menampilkan ringkasan hasil dalam format laporan teks profesional.
+1. Mengambil URL hasil Google hingga batas `GOOGLE_DORK_MAX_RESULTS` (diprioritaskan sesuai filetype bila filetype diisi).
+2. Mengunduh setiap URL hasil, lalu mencoba ekstraksi konten berdasarkan tipe data (Excel/CSV/text/HTML/JSON/XML).
+3. Menyaring data relevan berdasarkan keyword/target dan menampilkan ringkasan hasil dalam format laporan teks profesional.
 
 Contoh manual run di server:
 
