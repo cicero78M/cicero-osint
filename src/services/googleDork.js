@@ -131,24 +131,35 @@ function extractGoogleResultUrls(html) {
     hrefMatch = hrefRegex.exec(html);
   }
 
-  // fallback jika format HTML tidak menyimpan link hasil pada elemen <a href>
-  if (links.length === 0) {
+  const normalizedForFallback = String(html || '')
+    .replace(/\\u003d/gi, '=')
+    .replace(/\\u0026/gi, '&')
+    .replace(/\\\//g, '/');
+
+  const runFallbackExtraction = (source) => {
     const fallbackRegex = /\/url\?[^"'\s<>]*?(?:[?&](?:q|url)=)([^&"'\s<>]+)/gi;
-    let fallbackMatch = fallbackRegex.exec(html);
+    let fallbackMatch = fallbackRegex.exec(source);
     while (fallbackMatch) {
       pushDecodedIfValid(fallbackMatch[1]);
-      fallbackMatch = fallbackRegex.exec(html);
+      fallbackMatch = fallbackRegex.exec(source);
     }
+
+    const genericUrlRegex = /https?:\/\/[\w.-]+(?:\/[\w\-./?%&=:#]*)?/gi;
+    let genericMatch = genericUrlRegex.exec(source);
+    while (genericMatch) {
+      pushDecodedIfValid(genericMatch[0]);
+      genericMatch = genericUrlRegex.exec(source);
+    }
+  };
+
+  // fallback jika format HTML tidak menyimpan link hasil pada elemen <a href>
+  if (links.length === 0) {
+    runFallbackExtraction(html);
   }
 
   // fallback tambahan untuk variasi markup/serialized payload Google modern
   if (links.length === 0) {
-    const genericUrlRegex = /https?:\/\/[^\s"'<>\\]+/gi;
-    let genericMatch = genericUrlRegex.exec(html);
-    while (genericMatch) {
-      pushDecodedIfValid(genericMatch[0]);
-      genericMatch = genericUrlRegex.exec(html);
-    }
+    runFallbackExtraction(normalizedForFallback);
   }
 
   return [...new Set(links)];
@@ -168,6 +179,7 @@ function detectGoogleBlock(html) {
 
 async function fetchGoogleResultUrls(query, fileType, maxResults) {
   const attempts = [];
+  const diagnostics = [];
   let resultUrls = [];
   let detectedBlocking = false;
 
@@ -176,6 +188,7 @@ async function fetchGoogleResultUrls(query, fileType, maxResults) {
     const response = await fetch(searchUrl, { headers: GOOGLE_HEADERS, redirect: 'follow' });
     if (!response.ok) {
       attempts.push(`${variant.name}:HTTP_${response.status}`);
+      diagnostics.push({ variant: variant.name, status: 'http_error', httpStatus: response.status });
       continue;
     }
 
@@ -183,10 +196,17 @@ async function fetchGoogleResultUrls(query, fileType, maxResults) {
     if (detectGoogleBlock(html)) {
       detectedBlocking = true;
       attempts.push(`${variant.name}:BLOCKED`);
+      diagnostics.push({ variant: variant.name, status: 'blocked', htmlLength: html.length });
       continue;
     }
 
     resultUrls = extractGoogleResultUrls(html);
+    diagnostics.push({
+      variant: variant.name,
+      status: 'ok',
+      htmlLength: html.length,
+      extractedUrlCount: resultUrls.length
+    });
     attempts.push(`${variant.name}:${resultUrls.length}`);
     if (resultUrls.length > 0) break;
   }
@@ -197,16 +217,40 @@ async function fetchGoogleResultUrls(query, fileType, maxResults) {
 
   const uniqueUrls = [...new Set(resultUrls)];
   if (uniqueUrls.length === 0) {
-    return { links: [], attempts, totalDiscovered: 0 };
+    return { links: [], attempts, totalDiscovered: 0, diagnostics };
   }
 
   if (!fileType) {
-    return { links: uniqueUrls.slice(0, maxResults), attempts, totalDiscovered: uniqueUrls.length };
+    return { links: uniqueUrls.slice(0, maxResults), attempts, totalDiscovered: uniqueUrls.length, diagnostics };
   }
 
   const matched = uniqueUrls.filter((url) => matchesFileType(url, fileType));
   const remaining = uniqueUrls.filter((url) => !matchesFileType(url, fileType));
-  return { links: [...matched, ...remaining].slice(0, maxResults), attempts, totalDiscovered: uniqueUrls.length };
+  return {
+    links: [...matched, ...remaining].slice(0, maxResults),
+    attempts,
+    totalDiscovered: uniqueUrls.length,
+    diagnostics
+  };
+}
+
+function summarizeGoogleDiagnostics(diagnostics) {
+  if (!Array.isArray(diagnostics) || diagnostics.length === 0) {
+    return 'Tidak ada data diagnostik pengambilan URL dari Google.';
+  }
+
+  return diagnostics
+    .map((item) => {
+      const details = [
+        `varian=${item.variant || '-'}`,
+        `status=${item.status || '-'}`,
+        `http=${item.httpStatus || '-'}`,
+        `html=${item.htmlLength || 0}`,
+        `url=${item.extractedUrlCount || 0}`
+      ];
+      return `- ${details.join(', ')}`;
+    })
+    .join('\n');
 }
 
 async function fetchUrlBody(url) {
@@ -301,7 +345,7 @@ function buildRelevantRows({ rows, keyword, target, sourceUrl }) {
   return extracted;
 }
 
-function formatProfessionalReport({ query, searchUrl, links, extractedRows, fileType, maxResults, totalDiscovered }) {
+function formatProfessionalReport({ query, searchUrl, links, extractedRows, fileType, maxResults, totalDiscovered, diagnostics }) {
   const lines = [
     'Laporan Google Dork',
     `Query: ${query}`,
@@ -330,14 +374,22 @@ function formatProfessionalReport({ query, searchUrl, links, extractedRows, file
     });
   }
 
+  lines.push('', 'Diagnostik proses Google:');
+  lines.push(summarizeGoogleDiagnostics(diagnostics));
+
   lines.push('', 'Catatan: hanya baris yang relevan dengan keyword/target yang ditampilkan.');
   return lines.join('\n');
 }
 
 async function runGoogleDork({ keyword: rawKeyword, target: rawTarget, domain: rawDomain, fileType: rawFileType }) {
   const processLog = [];
-  const logStep = (message) => {
-    processLog.push(`[${new Date().toISOString()}] ${message}`);
+  const logStep = (message, metadata) => {
+    const timestamp = new Date().toISOString();
+    const serializedMetadata = metadata ? ` | data=${JSON.stringify(metadata)}` : '';
+    const line = `[${timestamp}] ${message}${serializedMetadata}`;
+    processLog.push(line);
+    // eslint-disable-next-line no-console
+    console.info(`[GoogleDork] ${line}`);
   };
 
   logStep('Memulai proses Google Dork.');
@@ -364,9 +416,12 @@ async function runGoogleDork({ keyword: rawKeyword, target: rawTarget, domain: r
   logStep(`Query berhasil dibentuk: ${query}`);
 
   logStep('Mengambil URL hasil dari Google Search.');
-  const { links, attempts, totalDiscovered } = await fetchGoogleResultUrls(query, fileType, maxResults);
+  const { links, attempts, totalDiscovered, diagnostics } = await fetchGoogleResultUrls(query, fileType, maxResults);
   logStep(`Strategi ekstraksi URL Google: ${attempts.join(', ') || '-'}`);
-  logStep(`Ditemukan ${totalDiscovered} URL dari Google, ${links.length} URL dipilih untuk diproses.`);
+  logStep(`Ditemukan ${totalDiscovered} URL dari Google, ${links.length} URL dipilih untuk diproses.`, {
+    attempts,
+    diagnostics
+  });
 
   const extractedRows = [];
   for (const url of links) {
@@ -374,12 +429,19 @@ async function runGoogleDork({ keyword: rawKeyword, target: rawTarget, domain: r
     try {
       const { buffer, contentType } = await fetchUrlBody(url);
       const rows = extractTextFromBuffer({ buffer, contentType, sourceUrl: url });
-      logStep(`Ekstraksi konten selesai (${rows.length} baris kandidat, content-type: ${contentType || '-'})`);
+      logStep(`Ekstraksi konten selesai (${rows.length} baris kandidat, content-type: ${contentType || '-'})`, {
+        url,
+        rows: rows.length,
+        contentType: contentType || '-'
+      });
       const relevantRows = buildRelevantRows({ rows, keyword, target, sourceUrl: url });
       extractedRows.push(...relevantRows);
-      logStep(`Filter relevansi selesai (${relevantRows.length} baris relevan).`);
+      logStep(`Filter relevansi selesai (${relevantRows.length} baris relevan).`, {
+        url,
+        relevantRows: relevantRows.length
+      });
     } catch (error) {
-      logStep(`Gagal memproses URL: ${error?.message || 'unknown error'}`);
+      logStep(`Gagal memproses URL: ${error?.message || 'unknown error'}`, { url });
     }
   }
 
@@ -394,13 +456,14 @@ async function runGoogleDork({ keyword: rawKeyword, target: rawTarget, domain: r
     searchUrl,
     totalDiscovered,
     links,
+    diagnostics,
     processLog,
-    output: formatProfessionalReport({ query, searchUrl, links, extractedRows, fileType, maxResults, totalDiscovered })
+    output: formatProfessionalReport({ query, searchUrl, links, extractedRows, fileType, maxResults, totalDiscovered, diagnostics })
   };
 }
 
 module.exports = {
   runGoogleDork,
   DOCUMENT_TYPES,
-  __testables: { extractGoogleResultUrls, detectGoogleBlock, matchesFileType }
+  __testables: { extractGoogleResultUrls, detectGoogleBlock, matchesFileType, summarizeGoogleDiagnostics }
 };
