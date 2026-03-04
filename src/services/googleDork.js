@@ -68,6 +68,7 @@ function matchesFileType(url, fileType) {
 
 function extractGoogleResultUrls(html) {
   const links = [];
+  const GOOGLE_REDIRECT_PATH = '/url';
 
   const decodeHtmlEntities = (value) =>
     String(value || '')
@@ -93,8 +94,35 @@ function extractGoogleResultUrls(html) {
     }
   };
 
+  const tryExtractRedirectTargetFromGoogleUrl = (candidateUrl) => {
+    try {
+      const parsed = new URL(candidateUrl);
+      const host = parsed.hostname.toLowerCase();
+      const isGoogleHost =
+        host === 'google.com' ||
+        host.endsWith('.google.com') ||
+        host === 'google.co.id' ||
+        host.endsWith('.google.co.id');
+
+      if (!isGoogleHost || parsed.pathname !== GOOGLE_REDIRECT_PATH) {
+        return '';
+      }
+
+      return parsed.searchParams.get('q') || parsed.searchParams.get('url') || '';
+    } catch (_) {
+      return '';
+    }
+  };
+
   const pushIfValid = (url) => {
     if (!/^https?:\/\//i.test(url)) return;
+
+    const redirectTarget = tryExtractRedirectTargetFromGoogleUrl(url);
+    if (redirectTarget) {
+      pushDecodedIfValid(redirectTarget);
+      return;
+    }
+
     if (isGoogleOwnedUrl(url)) return;
     if (/google\.[a-z.]+\/search\?/i.test(url)) return;
     links.push(url);
@@ -137,7 +165,7 @@ function extractGoogleResultUrls(html) {
     .replace(/\\\//g, '/');
 
   const runFallbackExtraction = (source) => {
-    const fallbackRegex = /\/url\?[^"'\s<>]*?(?:[?&](?:q|url)=)([^&"'\s<>]+)/gi;
+    const fallbackRegex = /(?:https?:\/\/www\.google\.[a-z.]+)?\/url\?[^"'\s<>]*?(?:[?&](?:q|url)=)([^&"'\s<>]+)/gi;
     let fallbackMatch = fallbackRegex.exec(source);
     while (fallbackMatch) {
       pushDecodedIfValid(fallbackMatch[1]);

@@ -32,6 +32,22 @@ test('extractGoogleResultUrls should parse serialized unicode escaped google pay
   assert.equal(urls[0], 'https://files.example.net/dump.xlsx?download=1');
 });
 
+test('extractGoogleResultUrls should parse absolute google redirect href with url param', () => {
+  const html = '<a href="https://www.google.com/url?url=https%3A%2F%2Fexample.com%2Fa.pdf">file</a>';
+
+  const urls = __testables.extractGoogleResultUrls(html);
+  assert.equal(urls.length, 1);
+  assert.equal(urls[0], 'https://example.com/a.pdf');
+});
+
+test('extractGoogleResultUrls should parse serialized payload with absolute google redirect url', () => {
+  const html = String.raw`{"link":"https:\/\/www.google.com\/url?sa=t\u0026url=https%3A%2F%2Fcdn.example.io%2Freports%2Fq1.pdf\u0026ved=abc"}`;
+
+  const urls = __testables.extractGoogleResultUrls(html);
+  assert.equal(urls.length, 1);
+  assert.equal(urls[0], 'https://cdn.example.io/reports/q1.pdf');
+});
+
 test('summarizeGoogleDiagnostics should produce readable diagnostic lines', () => {
   const summary = __testables.summarizeGoogleDiagnostics([
     { variant: 'default', status: 'ok', htmlLength: 12345, extractedUrlCount: 2 },
