@@ -13,7 +13,7 @@ const GOOGLE_HEADERS = {
 function sanitizeKeyword(input) {
   const keyword = String(input || '').trim();
   if (!keyword) {
-    throw new Error('Keyword kosong. Gunakan: !dorkdoc <keyword> atau !dorkdoc <keyword> <target> <domain> <tipe_dokumen>');
+    throw new Error('Keyword kosong. Gunakan: !dorkdoc <keyword> atau !dorkdoc <keyword> <target|-> <domain|-> <tipe_dokumen>');
   }
   if (keyword.length > 120) {
     throw new Error('Keyword terlalu panjang. Maksimal 120 karakter.');
@@ -24,7 +24,7 @@ function sanitizeKeyword(input) {
 function sanitizeTarget(input) {
   const target = String(input || '').trim();
   if (!target) {
-    throw new Error('Target kosong. Gunakan: !dorkdoc <keyword> <target> <domain> <tipe_dokumen>');
+    return '';
   }
   if (target.length > 120) {
     throw new Error('Target terlalu panjang. Maksimal 120 karakter.');
@@ -34,11 +34,8 @@ function sanitizeTarget(input) {
 
 function sanitizeDomain(input) {
   const domain = String(input || '').trim().toLowerCase();
-  if (!domain && env.GOOGLE_DORK_DEFAULT_SITE) {
-    return env.GOOGLE_DORK_DEFAULT_SITE;
-  }
   if (!domain) {
-    throw new Error('Domain kosong. Gunakan: !dorkdoc <keyword> <target> <domain|-> <tipe_dokumen>');
+    return '';
   }
   if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(domain)) {
     throw new Error('Format domain tidak valid. Contoh: example.com');
@@ -49,7 +46,7 @@ function sanitizeDomain(input) {
 function sanitizeFileType(input) {
   const fileType = String(input || '').trim().toLowerCase().replace(/^\./, '');
   if (!fileType) {
-    throw new Error('Tipe dokumen kosong. Gunakan: !dorkdoc <keyword> <target> <domain> <tipe_dokumen>');
+    throw new Error('Tipe dokumen kosong. Gunakan: !dorkdoc <keyword> <target|-> <domain|-> <tipe_dokumen>');
   }
   if (!DOCUMENT_TYPES.includes(fileType)) {
     throw new Error(`Tipe dokumen tidak didukung. Pilihan: ${DOCUMENT_TYPES.join(', ')}`);
@@ -58,6 +55,23 @@ function sanitizeFileType(input) {
     throw new Error('Untuk mode analisis hasil otomatis, tipe dokumen hanya boleh xls atau xlsx.');
   }
   return fileType;
+}
+
+function extractExcelUrlsFromHtml(html) {
+  const matches = html.match(/https?:\/\/[^\s"'<>]+\.xlsx?(?:\?[^\s"'<>]*)?/gi) || [];
+  const hrefRegex = /href="([^"]+)"/gi;
+  let hrefMatch = hrefRegex.exec(html);
+
+  while (hrefMatch) {
+    const href = hrefMatch[1] || '';
+    if (/\.xlsx?(?:\?|$)/i.test(href)) {
+      const normalized = href.startsWith('http') ? href : href.replace(/^\/+/, 'https://');
+      matches.push(normalized);
+    }
+    hrefMatch = hrefRegex.exec(html);
+  }
+
+  return [...new Set(matches)];
 }
 
 function extractGoogleResultUrls(html) {
@@ -85,8 +99,36 @@ async function fetchGoogleTopExcelUrls(query) {
   }
 
   const html = await response.text();
-  const resultUrls = extractGoogleResultUrls(html).filter((url) => /\.xlsx?(\?|$)/i.test(url));
-  return resultUrls.slice(0, 3);
+  const resultUrls = extractGoogleResultUrls(html);
+  const directExcelUrls = resultUrls.filter((url) => /\.xlsx?(\?|$)/i.test(url));
+
+  if (directExcelUrls.length >= 3) {
+    return directExcelUrls.slice(0, 3);
+  }
+
+  const discovered = [...directExcelUrls];
+
+  for (const pageUrl of resultUrls) {
+    if (discovered.length >= 3) break;
+    if (/\.xlsx?(\?|$)/i.test(pageUrl)) continue;
+
+    try {
+      const pageResponse = await fetch(pageUrl, { headers: GOOGLE_HEADERS });
+      if (!pageResponse.ok) continue;
+      const pageHtml = await pageResponse.text();
+      const excelUrls = extractExcelUrlsFromHtml(pageHtml);
+      for (const excelUrl of excelUrls) {
+        if (discovered.length >= 3) break;
+        if (!discovered.includes(excelUrl)) {
+          discovered.push(excelUrl);
+        }
+      }
+    } catch (error) {
+      // abaikan dan lanjutkan ke hasil berikutnya
+    }
+  }
+
+  return discovered.slice(0, 3);
 }
 
 async function fetchExcelAsRows(url) {
@@ -144,11 +186,16 @@ function formatProfessionalReport({ query, searchUrl, links, extractedRows }) {
     `Query: ${query}`,
     `URL: ${searchUrl}`,
     '',
-    'Top 3 hasil file excel:',
-    ...links.map((link, index) => `${index + 1}. ${link}`),
-    '',
-    'Data relevan (gabungan hasil):'
+    'Top 3 hasil file excel:'
   ];
+
+  if (links.length === 0) {
+    lines.push('- Tidak ada URL excel yang bisa diekstrak dari hasil Google.');
+  } else {
+    lines.push(...links.map((link, index) => `${index + 1}. ${link}`));
+  }
+
+  lines.push('', 'Data relevan (gabungan hasil):');
 
   if (extractedRows.length === 0) {
     lines.push('- Tidak ditemukan baris yang mengandung keyword/target pada 3 file teratas.');
@@ -176,8 +223,16 @@ async function runGoogleDork({ keyword: rawKeyword, target: rawTarget, domain: r
   const fileType = sanitizeFileType(rawFileType);
   logStep('Validasi parameter selesai (keyword, target, domain, tipe dokumen).');
 
-  const siteDomain = domain || env.GOOGLE_DORK_DEFAULT_SITE;
-  const query = `site:${siteDomain} intitle:"${target}" "${keyword}" (filetype:xls OR filetype:xlsx)`;
+  const queryParts = [];
+  if (domain) {
+    queryParts.push(`site:${domain}`);
+  }
+  if (target) {
+    queryParts.push(`intitle:"${target}"`);
+  }
+  queryParts.push(`"${keyword}"`);
+  queryParts.push('(filetype:xls OR filetype:xlsx)');
+  const query = queryParts.join(' ');
   const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
   logStep(`Query berhasil dibentuk: ${query}`);
 
