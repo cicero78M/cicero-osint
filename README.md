@@ -61,8 +61,8 @@ npm start
 - `!maigret <username>`
 - `!instaloader <username>`
 - `!theharvester <domain>`
-- `!dorkdoc <keyword>` (alias: `!dork`, default target/domain `scribd.com`, tipe `xls`)
-- `!dorkdoc <keyword> <target> <domain|-> <tipe_dokumen_excel>` (mode lengkap)
+- `!dorkdoc <keyword>` (alias: `!dork`, mode cepat pencarian luas, tipe `xls`)
+- `!dorkdoc <keyword> <target|-> <domain|-> <tipe_dokumen_excel>` (mode lengkap)
 - `!exif` (reply gambar)
 
 Contoh:
@@ -119,12 +119,12 @@ Contoh command dengan preset:
 !dork payroll login - xls
 ```
 
-Pada contoh pertama, bot otomatis memakai preset cepat (`target/domain scribd.com` + `filetype xls`).
-Pada contoh ketiga, domain `-` akan memakai nilai `GOOGLE_DORK_DEFAULT_SITE`.
+Pada contoh pertama, bot otomatis memakai preset cepat (pencarian luas + `filetype xls`).
+Pada mode lengkap, isi `-` pada `target`/`domain` jika ingin menonaktifkan filter tersebut. Domain `-` akan memakai `GOOGLE_DORK_DEFAULT_SITE` bila variabel itu di-set.
 
 Fitur `dorkdoc/dork` sekarang difokuskan untuk file Excel (`xls`/`xlsx`) saja. Setelah query dibentuk, service akan:
 
-1. Mengambil 3 hasil teratas dari Google Search yang mengarah ke file excel.
+1. Mengambil hasil teratas Google Search, lalu mengekstrak sampai 3 URL file excel (langsung dari SERP atau dari halaman hasil sebagai fallback).
 2. Mengunduh dan mengekstrak konten sheet pertama setiap file.
 3. Menggabungkan hasil dan menampilkan hanya baris yang relevan dengan keyword/target dalam format laporan teks profesional.
 

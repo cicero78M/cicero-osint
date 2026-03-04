@@ -13,7 +13,7 @@ const GOOGLE_HEADERS = {
 function sanitizeKeyword(input) {
   const keyword = String(input || '').trim();
   if (!keyword) {
-    throw new Error('Keyword kosong. Gunakan: !dorkdoc <keyword> atau !dorkdoc <keyword> <target> <domain> <tipe_dokumen>');
+    throw new Error('Keyword kosong. Gunakan: !dorkdoc <keyword> atau !dorkdoc <keyword> <target|-> <domain|-> <tipe_dokumen>');
   }
   if (keyword.length > 120) {
     throw new Error('Keyword terlalu panjang. Maksimal 120 karakter.');
@@ -24,7 +24,7 @@ function sanitizeKeyword(input) {
 function sanitizeTarget(input) {
   const target = String(input || '').trim();
   if (!target) {
-    throw new Error('Target kosong. Gunakan: !dorkdoc <keyword> <target> <domain> <tipe_dokumen>');
+    return '';
   }
   if (target.length > 120) {
     throw new Error('Target terlalu panjang. Maksimal 120 karakter.');
@@ -34,11 +34,8 @@ function sanitizeTarget(input) {
 
 function sanitizeDomain(input) {
   const domain = String(input || '').trim().toLowerCase();
-  if (!domain && env.GOOGLE_DORK_DEFAULT_SITE) {
-    return env.GOOGLE_DORK_DEFAULT_SITE;
-  }
   if (!domain) {
-    throw new Error('Domain kosong. Gunakan: !dorkdoc <keyword> <target> <domain|-> <tipe_dokumen>');
+    return '';
   }
   if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(domain)) {
     throw new Error('Format domain tidak valid. Contoh: example.com');
@@ -49,7 +46,7 @@ function sanitizeDomain(input) {
 function sanitizeFileType(input) {
   const fileType = String(input || '').trim().toLowerCase().replace(/^\./, '');
   if (!fileType) {
-    throw new Error('Tipe dokumen kosong. Gunakan: !dorkdoc <keyword> <target> <domain> <tipe_dokumen>');
+    throw new Error('Tipe dokumen kosong. Gunakan: !dorkdoc <keyword> <target|-> <domain|-> <tipe_dokumen>');
   }
   if (!DOCUMENT_TYPES.includes(fileType)) {
     throw new Error(`Tipe dokumen tidak didukung. Pilihan: ${DOCUMENT_TYPES.join(', ')}`);
@@ -226,8 +223,16 @@ async function runGoogleDork({ keyword: rawKeyword, target: rawTarget, domain: r
   const fileType = sanitizeFileType(rawFileType);
   logStep('Validasi parameter selesai (keyword, target, domain, tipe dokumen).');
 
-  const siteDomain = domain || env.GOOGLE_DORK_DEFAULT_SITE;
-  const query = `site:${siteDomain} intitle:"${target}" "${keyword}" (filetype:xls OR filetype:xlsx)`;
+  const queryParts = [];
+  if (domain) {
+    queryParts.push(`site:${domain}`);
+  }
+  if (target) {
+    queryParts.push(`intitle:"${target}"`);
+  }
+  queryParts.push(`"${keyword}"`);
+  queryParts.push('(filetype:xls OR filetype:xlsx)');
+  const query = queryParts.join(' ');
   const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
   logStep(`Query berhasil dibentuk: ${query}`);
 
