@@ -109,3 +109,25 @@ test('fetchGoogleResultUrls should run fallback diagnostics when all primary var
     global.fetch = originalFetch;
   }
 });
+
+test('normalizeKeywordForBroadSearch should convert separators to spaces', () => {
+  assert.equal(__testables.normalizeKeywordForBroadSearch('cicero_devs'), 'cicero devs');
+  assert.equal(__testables.normalizeKeywordForBroadSearch('a-b.c'), 'a b c');
+});
+
+test('buildGoogleDorkQueryPlans should include exact and broad variants without duplicates', () => {
+  const plans = __testables.buildGoogleDorkQueryPlans({
+    keyword: 'cicero_devs',
+    target: '',
+    domain: '',
+    fileType: ''
+  });
+
+  assert.deepEqual(
+    plans.map((item) => item.reason),
+    ['exact_keyword_phrase', 'broad_keyword', 'broad_keyword_separator_normalized']
+  );
+  assert.equal(plans[0].query, '"cicero_devs"');
+  assert.equal(plans[1].query, 'cicero_devs');
+  assert.equal(plans[2].query, 'cicero devs');
+});
