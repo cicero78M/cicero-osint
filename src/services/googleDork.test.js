@@ -74,3 +74,38 @@ test('summarizeGoogleDiagnostics should produce readable diagnostic lines', () =
   assert.match(summary, /varian=default, status=ok, http=-, html=12345, url=2/);
   assert.match(summary, /varian=basic, status=http_error, http=429, html=0, url=0/);
 });
+
+
+test('fetchGoogleResultUrls should run fallback diagnostics when all primary variants return zero urls', async () => {
+  const originalFetch = global.fetch;
+  const htmlNoResult = '<html><body><div>no links</div></body></html>';
+  const responses = Array.from({ length: 5 }, () => ({
+    ok: true,
+    text: async () => htmlNoResult
+  }));
+  let callIndex = 0;
+
+  global.fetch = async (url) => {
+    const response = responses[callIndex];
+    callIndex += 1;
+    return {
+      ...response,
+      url
+    };
+  };
+
+  try {
+    const result = await __testables.fetchGoogleResultUrls('"laporan rahasia" filetype:pdf', '', 20);
+
+    assert.equal(result.links.length, 0);
+    assert.equal(result.totalDiscovered, 0);
+    assert.equal(callIndex, 5);
+    assert.ok(result.diagnostics.some((item) => item.stage === 'fallback' && item.status === 'triggered'));
+    assert.ok(result.diagnostics.some((item) => item.stage === 'fallback_1' && item.status === 'ok'));
+    assert.ok(result.diagnostics.some((item) => item.stage === 'fallback_2' && item.status === 'ok'));
+    assert.match(result.attempts.join(','), /fallback_1:default:0/);
+    assert.match(result.attempts.join(','), /fallback_2:default:0/);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
