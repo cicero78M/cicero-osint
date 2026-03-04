@@ -492,6 +492,16 @@ async function startWhatsAppClient() {
           title: 'theHarvester',
           targetLabel: 'domain',
           progressText: 'Sedang melakukan proses pengumpulan data OSINT domain'
+        },
+        dorkdoc: {
+          title: 'Google Dork',
+          targetLabel: 'keyword',
+          progressText: 'Sedang membentuk query dan mengambil hasil dokumen sesuai parameter'
+        },
+        dork: {
+          title: 'Google Dork',
+          targetLabel: 'keyword',
+          progressText: 'Sedang membentuk query dan mengambil hasil dokumen sesuai parameter'
         }
       };
 
