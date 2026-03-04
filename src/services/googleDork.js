@@ -1,6 +1,14 @@
 const { env } = require('../config/env');
+const XLSX = require('xlsx');
 
 const DOCUMENT_TYPES = env.GOOGLE_DORK_DOC_TYPES;
+const EXCEL_TYPES = ['xls', 'xlsx'];
+const GOOGLE_HEADERS = {
+  'User-Agent':
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.9'
+};
 
 function sanitizeKeyword(input) {
   const keyword = String(input || '').trim();
@@ -46,18 +54,139 @@ function sanitizeFileType(input) {
   if (!DOCUMENT_TYPES.includes(fileType)) {
     throw new Error(`Tipe dokumen tidak didukung. Pilihan: ${DOCUMENT_TYPES.join(', ')}`);
   }
+  if (!EXCEL_TYPES.includes(fileType)) {
+    throw new Error('Untuk mode analisis hasil otomatis, tipe dokumen hanya boleh xls atau xlsx.');
+  }
   return fileType;
 }
 
-function runGoogleDork({ keyword: rawKeyword, target: rawTarget, domain: rawDomain, fileType: rawFileType }) {
+function extractGoogleResultUrls(html) {
+  const links = [];
+  const regex = /<a\s+href="\/url\?q=([^"&]+)[^"]*"/g;
+  let match = regex.exec(html);
+
+  while (match) {
+    const raw = decodeURIComponent(match[1]);
+    if (/^https?:\/\//i.test(raw) && !raw.includes('google.com')) {
+      links.push(raw);
+    }
+    match = regex.exec(html);
+  }
+
+  return [...new Set(links)];
+}
+
+async function fetchGoogleTopExcelUrls(query) {
+  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=10&hl=id`;
+  const response = await fetch(searchUrl, { headers: GOOGLE_HEADERS });
+
+  if (!response.ok) {
+    throw new Error(`Google Search gagal diakses (HTTP ${response.status}).`);
+  }
+
+  const html = await response.text();
+  const resultUrls = extractGoogleResultUrls(html).filter((url) => /\.xlsx?(\?|$)/i.test(url));
+  return resultUrls.slice(0, 3);
+}
+
+async function fetchExcelAsRows(url) {
+  const response = await fetch(url, { headers: { 'User-Agent': GOOGLE_HEADERS['User-Agent'] } });
+  if (!response.ok) {
+    throw new Error(`Download file gagal (HTTP ${response.status}).`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const workbook = XLSX.read(Buffer.from(arrayBuffer), { type: 'buffer' });
+  const firstSheetName = workbook.SheetNames[0];
+
+  if (!firstSheetName) {
+    return [];
+  }
+
+  const worksheet = workbook.Sheets[firstSheetName];
+  const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, raw: false });
+
+  return rows
+    .filter((row) => Array.isArray(row) && row.some((cell) => String(cell || '').trim()))
+    .slice(0, 200);
+}
+
+function normalizeCell(value) {
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildRelevantRows({ rows, keyword, target, sourceUrl }) {
+  const terms = [keyword, target].map((item) => String(item || '').toLowerCase()).filter(Boolean);
+
+  const extracted = [];
+
+  for (const row of rows) {
+    const cells = row.map(normalizeCell).filter(Boolean);
+    if (cells.length === 0) continue;
+
+    const text = cells.join(' | ');
+    const lowercaseText = text.toLowerCase();
+    const isRelevant = terms.some((term) => lowercaseText.includes(term));
+    if (!isRelevant) continue;
+
+    extracted.push({ sourceUrl, text });
+    if (extracted.length >= 6) break;
+  }
+
+  return extracted;
+}
+
+function formatProfessionalReport({ query, searchUrl, links, extractedRows }) {
+  const lines = [
+    'Laporan Google Dork (Excel Only)',
+    `Query: ${query}`,
+    `URL: ${searchUrl}`,
+    '',
+    'Top 3 hasil file excel:',
+    ...links.map((link, index) => `${index + 1}. ${link}`),
+    '',
+    'Data relevan (gabungan hasil):'
+  ];
+
+  if (extractedRows.length === 0) {
+    lines.push('- Tidak ditemukan baris yang mengandung keyword/target pada 3 file teratas.');
+  } else {
+    extractedRows.forEach((item, index) => {
+      lines.push(`${index + 1}. [Sumber] ${item.sourceUrl}`);
+      lines.push(`   [Konten] ${item.text}`);
+    });
+  }
+
+  lines.push('', 'Catatan: hanya baris yang relevan dengan keyword/target yang ditampilkan.');
+  return lines.join('\n');
+}
+
+async function runGoogleDork({ keyword: rawKeyword, target: rawTarget, domain: rawDomain, fileType: rawFileType }) {
   const keyword = sanitizeKeyword(rawKeyword);
   const target = sanitizeTarget(rawTarget);
   const domain = sanitizeDomain(rawDomain);
   const fileType = sanitizeFileType(rawFileType);
 
   const siteDomain = domain || env.GOOGLE_DORK_DEFAULT_SITE;
-  const query = `site:${siteDomain} intitle:"${target}" "${keyword}" filetype:${fileType}`;
+  const query = `site:${siteDomain} intitle:"${target}" "${keyword}" (filetype:xls OR filetype:xlsx)`;
   const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+
+  const links = await fetchGoogleTopExcelUrls(query);
+
+  const extractedRows = [];
+  for (const url of links) {
+    try {
+      const rows = await fetchExcelAsRows(url);
+      extractedRows.push(...buildRelevantRows({ rows, keyword, target, sourceUrl: url }));
+    } catch (error) {
+      extractedRows.push({
+        sourceUrl: url,
+        text: `Gagal mengolah file excel: ${error?.message || 'unknown error'}`
+      });
+    }
+  }
 
   return {
     keyword,
@@ -66,11 +195,8 @@ function runGoogleDork({ keyword: rawKeyword, target: rawTarget, domain: rawDoma
     fileType,
     query,
     searchUrl,
-    output: [
-      `Query: ${query}`,
-      `URL: ${searchUrl}`,
-      'Catatan: hasil dapat berbeda sesuai lokasi, language, dan kebijakan Google Search.'
-    ].join('\n')
+    links,
+    output: formatProfessionalReport({ query, searchUrl, links, extractedRows })
   };
 }
 
