@@ -2,13 +2,17 @@ const { env } = require('../config/env');
 const XLSX = require('xlsx');
 
 const DOCUMENT_TYPES = env.GOOGLE_DORK_DOC_TYPES;
-const EXCEL_TYPES = ['xls', 'xlsx'];
 const GOOGLE_HEADERS = {
   'User-Agent':
     'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
   'Accept-Language': 'en-US,en;q=0.9'
 };
+const GOOGLE_SEARCH_VARIANTS = [
+  { name: 'default', extraParams: '' },
+  { name: 'basic', extraParams: '&gbv=1' },
+  { name: 'web', extraParams: '&udm=14' }
+];
 
 function sanitizeKeyword(input) {
   const keyword = String(input || '').trim();
@@ -92,7 +96,18 @@ function extractGoogleResultUrls(html) {
   const pushIfValid = (url) => {
     if (!/^https?:\/\//i.test(url)) return;
     if (isGoogleOwnedUrl(url)) return;
+    if (/google\.[a-z.]+\/search\?/i.test(url)) return;
     links.push(url);
+  };
+
+  const pushDecodedIfValid = (candidate) => {
+    if (!candidate) return;
+    const decoded = decodeHtmlEntities(candidate).trim();
+    try {
+      pushIfValid(decodeURIComponent(decoded));
+    } catch (_) {
+      pushIfValid(decoded);
+    }
   };
 
   const hrefRegex = /<a\b[^>]*\bhref\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/gi;
@@ -105,13 +120,13 @@ function extractGoogleResultUrls(html) {
         const parsed = new URL(`https://www.google.com${href}`);
         const externalUrl = parsed.searchParams.get('q') || parsed.searchParams.get('url');
         if (externalUrl) {
-          pushIfValid(decodeURIComponent(externalUrl));
+          pushDecodedIfValid(externalUrl);
         }
       } catch (_) {
         // abaikan href yang tidak valid
       }
     } else {
-      pushIfValid(href);
+      pushDecodedIfValid(href);
     }
     hrefMatch = hrefRegex.exec(html);
   }
@@ -121,32 +136,77 @@ function extractGoogleResultUrls(html) {
     const fallbackRegex = /\/url\?[^"'\s<>]*?(?:[?&](?:q|url)=)([^&"'\s<>]+)/gi;
     let fallbackMatch = fallbackRegex.exec(html);
     while (fallbackMatch) {
-      const rawUrl = decodeHtmlEntities(fallbackMatch[1]);
-      pushIfValid(decodeURIComponent(rawUrl));
+      pushDecodedIfValid(fallbackMatch[1]);
       fallbackMatch = fallbackRegex.exec(html);
+    }
+  }
+
+  // fallback tambahan untuk variasi markup/serialized payload Google modern
+  if (links.length === 0) {
+    const genericUrlRegex = /https?:\/\/[^\s"'<>\\]+/gi;
+    let genericMatch = genericUrlRegex.exec(html);
+    while (genericMatch) {
+      pushDecodedIfValid(genericMatch[0]);
+      genericMatch = genericUrlRegex.exec(html);
     }
   }
 
   return [...new Set(links)];
 }
 
+function detectGoogleBlock(html) {
+  const content = String(html || '').toLowerCase();
+  return [
+    'detected unusual traffic',
+    'our systems have detected unusual traffic',
+    '/sorry/index',
+    'captcha',
+    'recaptcha',
+    'verify you are human'
+  ].some((pattern) => content.includes(pattern));
+}
+
 async function fetchGoogleResultUrls(query, fileType, maxResults) {
-  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=50&hl=id`;
-  const response = await fetch(searchUrl, { headers: GOOGLE_HEADERS });
+  const attempts = [];
+  let resultUrls = [];
+  let detectedBlocking = false;
 
-  if (!response.ok) {
-    throw new Error(`Google Search gagal diakses (HTTP ${response.status}).`);
+  for (const variant of GOOGLE_SEARCH_VARIANTS) {
+    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=100&hl=id&safe=off&pws=0${variant.extraParams}`;
+    const response = await fetch(searchUrl, { headers: GOOGLE_HEADERS, redirect: 'follow' });
+    if (!response.ok) {
+      attempts.push(`${variant.name}:HTTP_${response.status}`);
+      continue;
+    }
+
+    const html = await response.text();
+    if (detectGoogleBlock(html)) {
+      detectedBlocking = true;
+      attempts.push(`${variant.name}:BLOCKED`);
+      continue;
+    }
+
+    resultUrls = extractGoogleResultUrls(html);
+    attempts.push(`${variant.name}:${resultUrls.length}`);
+    if (resultUrls.length > 0) break;
   }
 
-  const html = await response.text();
-  const resultUrls = extractGoogleResultUrls(html);
+  if (resultUrls.length === 0 && detectedBlocking) {
+    throw new Error('Google memblokir permintaan otomatis (captcha/unusual traffic). Coba lagi dari IP berbeda atau kurangi frekuensi request.');
+  }
+
+  const uniqueUrls = [...new Set(resultUrls)];
+  if (uniqueUrls.length === 0) {
+    return { links: [], attempts };
+  }
+
   if (!fileType) {
-    return resultUrls.slice(0, maxResults);
+    return { links: uniqueUrls.slice(0, maxResults), attempts };
   }
 
-  const matched = resultUrls.filter((url) => matchesFileType(url, fileType));
-  const remaining = resultUrls.filter((url) => !matchesFileType(url, fileType));
-  return [...matched, ...remaining].slice(0, maxResults);
+  const matched = uniqueUrls.filter((url) => matchesFileType(url, fileType));
+  const remaining = uniqueUrls.filter((url) => !matchesFileType(url, fileType));
+  return { links: [...matched, ...remaining].slice(0, maxResults), attempts };
 }
 
 async function fetchUrlBody(url) {
@@ -303,11 +363,11 @@ async function runGoogleDork({ keyword: rawKeyword, target: rawTarget, domain: r
   logStep(`Query berhasil dibentuk: ${query}`);
 
   logStep('Mengambil URL hasil dari Google Search.');
-  const links = await fetchGoogleResultUrls(query, fileType, maxResults);
+  const { links, attempts } = await fetchGoogleResultUrls(query, fileType, maxResults);
+  logStep(`Strategi ekstraksi URL Google: ${attempts.join(', ') || '-'}`);
   logStep(`Ditemukan ${links.length} URL hasil untuk diproses.`);
 
   const extractedRows = [];
-  const canAnalyzeExcel = !fileType || EXCEL_TYPES.includes(fileType);
   for (const url of links) {
     logStep(`Mengunduh URL: ${url}`);
     try {
@@ -337,4 +397,8 @@ async function runGoogleDork({ keyword: rawKeyword, target: rawTarget, domain: r
   };
 }
 
-module.exports = { runGoogleDork, DOCUMENT_TYPES };
+module.exports = {
+  runGoogleDork,
+  DOCUMENT_TYPES,
+  __testables: { extractGoogleResultUrls, detectGoogleBlock, matchesFileType }
+};
