@@ -3,6 +3,7 @@ const { runHolehe } = require('../services/holehe');
 const { runMaigret } = require('../services/maigret');
 const { runInstaloader } = require('../services/instaloader');
 const { runTheHarvester } = require('../services/theharvester');
+const { runGoogleDork, DOCUMENT_TYPES } = require('../services/googleDork');
 const { env } = require('../config/env');
 
 function getHelpMessage() {
@@ -16,8 +17,12 @@ function getHelpMessage() {
     `${env.BOT_PREFIX}maigret <username>`,
     `${env.BOT_PREFIX}instaloader <username>`,
     `${env.BOT_PREFIX}theharvester <domain>`,
+    `${env.BOT_PREFIX}dorkdoc <keyword> <target> <domain> <tipe_dokumen>`,
+    `${env.BOT_PREFIX}dork <keyword> <target> <domain> <tipe_dokumen>`,
     `${env.BOT_PREFIX}exif (reply gambar)`,
-    `${env.BOT_PREFIX}help`
+    `${env.BOT_PREFIX}help`,
+    '',
+    `Tipe dokumen didukung: ${DOCUMENT_TYPES.join(', ')}`
   ].join('\n');
 }
 
@@ -159,6 +164,59 @@ async function handleCommand(text) {
         isRateLimited
           ? 'Silakan tunggu sampai jeda rate limit selesai, lalu jalankan kembali perintah.'
           : 'Silakan coba kembali. Jika kendala berulang, mohon hubungi operator untuk pemeriksaan log server.'
+      ].join('\n');
+    }
+  }
+
+
+  if (command === 'dorkdoc' || command === 'dork') {
+    const [keyword, target, domain, fileType, ...extra] = rest;
+
+    if (!keyword || !target || !domain || !fileType || extra.length > 0) {
+      return [
+        `❌ *Informasi Proses Google Dork*`,
+        'Status: *Argumen tidak lengkap atau format tidak valid*',
+        '',
+        `Gunakan format: ${env.BOT_PREFIX}dorkdoc <keyword> <target> <domain> <tipe_dokumen>`,
+        `Alias: ${env.BOT_PREFIX}dork <keyword> <target> <domain> <tipe_dokumen>`,
+        `Tipe dokumen didukung: ${DOCUMENT_TYPES.join(', ')}`
+      ].join('\n');
+    }
+
+    try {
+      const result = runGoogleDork({ keyword, target, domain, fileType });
+      return [
+        '✅ *Informasi Proses Google Dork*',
+        `Keyword: *${result.keyword}*`,
+        `Target: *${result.target}*`,
+        `Domain: *${result.domain}*`,
+        `Tipe dokumen: *${result.fileType}*`,
+        'Status: *Query berhasil dibuat*',
+        '',
+        '*Ringkasan hasil eksekusi:*',
+        '```',
+        result.output || 'Tidak ada output.',
+        '```'
+      ].join('\n');
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Google dork command failed:', {
+        keyword,
+        target,
+        domain,
+        fileType,
+        error: error?.stack || error?.message || String(error)
+      });
+
+      return [
+        '❌ *Informasi Proses Google Dork*',
+        `Keyword: *${keyword || '-'}*`,
+        `Target: *${target || '-'}*`,
+        `Domain: *${domain || '-'}*`,
+        `Tipe dokumen: *${fileType || '-'}*`,
+        `Status: *${error?.message || 'Proses selesai dengan kegagalan'}*`,
+        '',
+        'Silakan periksa kembali parameter lalu coba ulangi perintah.'
       ].join('\n');
     }
   }
