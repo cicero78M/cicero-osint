@@ -60,6 +60,23 @@ function sanitizeFileType(input) {
   return fileType;
 }
 
+function extractExcelUrlsFromHtml(html) {
+  const matches = html.match(/https?:\/\/[^\s"'<>]+\.xlsx?(?:\?[^\s"'<>]*)?/gi) || [];
+  const hrefRegex = /href="([^"]+)"/gi;
+  let hrefMatch = hrefRegex.exec(html);
+
+  while (hrefMatch) {
+    const href = hrefMatch[1] || '';
+    if (/\.xlsx?(?:\?|$)/i.test(href)) {
+      const normalized = href.startsWith('http') ? href : href.replace(/^\/+/, 'https://');
+      matches.push(normalized);
+    }
+    hrefMatch = hrefRegex.exec(html);
+  }
+
+  return [...new Set(matches)];
+}
+
 function extractGoogleResultUrls(html) {
   const links = [];
   const regex = /<a\s+href="\/url\?q=([^"&]+)[^"]*"/g;
@@ -85,8 +102,36 @@ async function fetchGoogleTopExcelUrls(query) {
   }
 
   const html = await response.text();
-  const resultUrls = extractGoogleResultUrls(html).filter((url) => /\.xlsx?(\?|$)/i.test(url));
-  return resultUrls.slice(0, 3);
+  const resultUrls = extractGoogleResultUrls(html);
+  const directExcelUrls = resultUrls.filter((url) => /\.xlsx?(\?|$)/i.test(url));
+
+  if (directExcelUrls.length >= 3) {
+    return directExcelUrls.slice(0, 3);
+  }
+
+  const discovered = [...directExcelUrls];
+
+  for (const pageUrl of resultUrls) {
+    if (discovered.length >= 3) break;
+    if (/\.xlsx?(\?|$)/i.test(pageUrl)) continue;
+
+    try {
+      const pageResponse = await fetch(pageUrl, { headers: GOOGLE_HEADERS });
+      if (!pageResponse.ok) continue;
+      const pageHtml = await pageResponse.text();
+      const excelUrls = extractExcelUrlsFromHtml(pageHtml);
+      for (const excelUrl of excelUrls) {
+        if (discovered.length >= 3) break;
+        if (!discovered.includes(excelUrl)) {
+          discovered.push(excelUrl);
+        }
+      }
+    } catch (error) {
+      // abaikan dan lanjutkan ke hasil berikutnya
+    }
+  }
+
+  return discovered.slice(0, 3);
 }
 
 async function fetchExcelAsRows(url) {
@@ -144,11 +189,16 @@ function formatProfessionalReport({ query, searchUrl, links, extractedRows }) {
     `Query: ${query}`,
     `URL: ${searchUrl}`,
     '',
-    'Top 3 hasil file excel:',
-    ...links.map((link, index) => `${index + 1}. ${link}`),
-    '',
-    'Data relevan (gabungan hasil):'
+    'Top 3 hasil file excel:'
   ];
+
+  if (links.length === 0) {
+    lines.push('- Tidak ada URL excel yang bisa diekstrak dari hasil Google.');
+  } else {
+    lines.push(...links.map((link, index) => `${index + 1}. ${link}`));
+  }
+
+  lines.push('', 'Data relevan (gabungan hasil):');
 
   if (extractedRows.length === 0) {
     lines.push('- Tidak ditemukan baris yang mengandung keyword/target pada 3 file teratas.');
