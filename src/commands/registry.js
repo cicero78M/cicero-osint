@@ -210,6 +210,11 @@ async function handleCommand(text) {
         '*Ringkasan hasil eksekusi:*',
         '```',
         result.output || 'Tidak ada output.',
+        '```',
+        '',
+        '*Log proses:*',
+        '```',
+        (result.processLog || []).join('\n') || 'Log proses tidak tersedia.',
         '```'
       ].join('\n');
     } catch (error) {

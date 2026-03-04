@@ -164,29 +164,45 @@ function formatProfessionalReport({ query, searchUrl, links, extractedRows }) {
 }
 
 async function runGoogleDork({ keyword: rawKeyword, target: rawTarget, domain: rawDomain, fileType: rawFileType }) {
+  const processLog = [];
+  const logStep = (message) => {
+    processLog.push(`[${new Date().toISOString()}] ${message}`);
+  };
+
+  logStep('Memulai proses Google Dork.');
   const keyword = sanitizeKeyword(rawKeyword);
   const target = sanitizeTarget(rawTarget);
   const domain = sanitizeDomain(rawDomain);
   const fileType = sanitizeFileType(rawFileType);
+  logStep('Validasi parameter selesai (keyword, target, domain, tipe dokumen).');
 
   const siteDomain = domain || env.GOOGLE_DORK_DEFAULT_SITE;
   const query = `site:${siteDomain} intitle:"${target}" "${keyword}" (filetype:xls OR filetype:xlsx)`;
   const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+  logStep(`Query berhasil dibentuk: ${query}`);
 
+  logStep('Mengambil hasil teratas dari Google Search.');
   const links = await fetchGoogleTopExcelUrls(query);
+  logStep(`Ditemukan ${links.length} link Excel untuk diproses.`);
 
   const extractedRows = [];
   for (const url of links) {
+    logStep(`Mengunduh & mengekstrak file: ${url}`);
     try {
       const rows = await fetchExcelAsRows(url);
-      extractedRows.push(...buildRelevantRows({ rows, keyword, target, sourceUrl: url }));
+      const relevantRows = buildRelevantRows({ rows, keyword, target, sourceUrl: url });
+      extractedRows.push(...relevantRows);
+      logStep(`Sukses memproses file (${rows.length} baris, ${relevantRows.length} baris relevan).`);
     } catch (error) {
+      logStep(`Gagal memproses file: ${error?.message || 'unknown error'}`);
       extractedRows.push({
         sourceUrl: url,
         text: `Gagal mengolah file excel: ${error?.message || 'unknown error'}`
       });
     }
   }
+
+  logStep(`Proses selesai. Total temuan relevan: ${extractedRows.length}.`);
 
   return {
     keyword,
@@ -196,6 +212,7 @@ async function runGoogleDork({ keyword: rawKeyword, target: rawTarget, domain: r
     query,
     searchUrl,
     links,
+    processLog,
     output: formatProfessionalReport({ query, searchUrl, links, extractedRows })
   };
 }
