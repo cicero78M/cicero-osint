@@ -13,7 +13,7 @@ const GOOGLE_HEADERS = {
 function sanitizeKeyword(input) {
   const keyword = String(input || '').trim();
   if (!keyword) {
-    throw new Error('Keyword kosong. Gunakan: !dorkdoc <keyword> atau !dorkdoc <keyword> <target> <domain> <tipe_dokumen>');
+    throw new Error('Keyword kosong. Gunakan: !dorkdoc <keyword> atau !dorkdoc <keyword> <target|-> <domain|-> <tipe_dokumen>');
   }
   if (keyword.length > 120) {
     throw new Error('Keyword terlalu panjang. Maksimal 120 karakter.');
@@ -24,7 +24,7 @@ function sanitizeKeyword(input) {
 function sanitizeTarget(input) {
   const target = String(input || '').trim();
   if (!target) {
-    throw new Error('Target kosong. Gunakan: !dorkdoc <keyword> <target> <domain> <tipe_dokumen>');
+    return '';
   }
   if (target.length > 120) {
     throw new Error('Target terlalu panjang. Maksimal 120 karakter.');
@@ -34,11 +34,8 @@ function sanitizeTarget(input) {
 
 function sanitizeDomain(input) {
   const domain = String(input || '').trim().toLowerCase();
-  if (!domain && env.GOOGLE_DORK_DEFAULT_SITE) {
-    return env.GOOGLE_DORK_DEFAULT_SITE;
-  }
   if (!domain) {
-    throw new Error('Domain kosong. Gunakan: !dorkdoc <keyword> <target> <domain|-> <tipe_dokumen>');
+    return '';
   }
   if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(domain)) {
     throw new Error('Format domain tidak valid. Contoh: example.com');
@@ -48,16 +45,21 @@ function sanitizeDomain(input) {
 
 function sanitizeFileType(input) {
   const fileType = String(input || '').trim().toLowerCase().replace(/^\./, '');
-  if (!fileType) {
-    throw new Error('Tipe dokumen kosong. Gunakan: !dorkdoc <keyword> <target> <domain> <tipe_dokumen>');
+  if (!fileType || fileType === '-' || fileType === 'all' || fileType === 'any') {
+    return '';
   }
   if (!DOCUMENT_TYPES.includes(fileType)) {
-    throw new Error(`Tipe dokumen tidak didukung. Pilihan: ${DOCUMENT_TYPES.join(', ')}`);
-  }
-  if (!EXCEL_TYPES.includes(fileType)) {
-    throw new Error('Untuk mode analisis hasil otomatis, tipe dokumen hanya boleh xls atau xlsx.');
+    throw new Error(`Tipe dokumen tidak didukung. Pilihan: ${DOCUMENT_TYPES.join(', ')}, -, all, any`);
   }
   return fileType;
+}
+
+function matchesFileType(url, fileType) {
+  if (!fileType) return true;
+  const safeType = String(fileType).replace(/[^a-z0-9]/gi, '');
+  if (!safeType) return false;
+  const regex = new RegExp(`\\.${safeType}(?:\\?|$)`, 'i');
+  return regex.test(url);
 }
 
 function extractGoogleResultUrls(html) {
@@ -76,7 +78,7 @@ function extractGoogleResultUrls(html) {
   return [...new Set(links)];
 }
 
-async function fetchGoogleTopExcelUrls(query) {
+async function fetchGoogleTopResultUrls(query, fileType) {
   const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=10&hl=id`;
   const response = await fetch(searchUrl, { headers: GOOGLE_HEADERS });
 
@@ -85,8 +87,14 @@ async function fetchGoogleTopExcelUrls(query) {
   }
 
   const html = await response.text();
-  const resultUrls = extractGoogleResultUrls(html).filter((url) => /\.xlsx?(\?|$)/i.test(url));
-  return resultUrls.slice(0, 3);
+  const resultUrls = extractGoogleResultUrls(html);
+  if (!fileType) {
+    return resultUrls.slice(0, 3);
+  }
+
+  const matched = resultUrls.filter((url) => matchesFileType(url, fileType));
+  const remaining = resultUrls.filter((url) => !matchesFileType(url, fileType));
+  return [...matched, ...remaining].slice(0, 3);
 }
 
 async function fetchExcelAsRows(url) {
@@ -138,20 +146,26 @@ function buildRelevantRows({ rows, keyword, target, sourceUrl }) {
   return extracted;
 }
 
-function formatProfessionalReport({ query, searchUrl, links, extractedRows }) {
+function formatProfessionalReport({ query, searchUrl, links, extractedRows, fileType }) {
   const lines = [
-    'Laporan Google Dork (Excel Only)',
+    'Laporan Google Dork',
     `Query: ${query}`,
     `URL: ${searchUrl}`,
     '',
-    'Top 3 hasil file excel:',
-    ...links.map((link, index) => `${index + 1}. ${link}`),
-    '',
-    'Data relevan (gabungan hasil):'
+    `Filter file: ${fileType || 'tanpa filter filetype'}`,
+    'Top 3 hasil URL hasil pencarian:'
   ];
 
+  if (links.length === 0) {
+    lines.push('- Tidak ada URL hasil yang bisa diekstrak dari Google.');
+  } else {
+    lines.push(...links.map((link, index) => `${index + 1}. ${link}`));
+  }
+
+  lines.push('', 'Data relevan (gabungan hasil):');
+
   if (extractedRows.length === 0) {
-    lines.push('- Tidak ditemukan baris yang mengandung keyword/target pada 3 file teratas.');
+    lines.push('- Tidak ada analisis konten tambahan untuk hasil ini (otomatis hanya untuk file xls/xlsx).');
   } else {
     extractedRows.forEach((item, index) => {
       lines.push(`${index + 1}. [Sumber] ${item.sourceUrl}`);
@@ -176,18 +190,35 @@ async function runGoogleDork({ keyword: rawKeyword, target: rawTarget, domain: r
   const fileType = sanitizeFileType(rawFileType);
   logStep('Validasi parameter selesai (keyword, target, domain, tipe dokumen).');
 
-  const siteDomain = domain || env.GOOGLE_DORK_DEFAULT_SITE;
-  const query = `site:${siteDomain} intitle:"${target}" "${keyword}" (filetype:xls OR filetype:xlsx)`;
+  const queryParts = [];
+  if (domain) {
+    queryParts.push(`site:${domain}`);
+  }
+  if (target) {
+    queryParts.push(`intitle:"${target}"`);
+  }
+  queryParts.push(`"${keyword}"`);
+  if (fileType) {
+    queryParts.push(`filetype:${fileType}`);
+  }
+  const query = queryParts.join(' ');
   const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
   logStep(`Query berhasil dibentuk: ${query}`);
 
   logStep('Mengambil hasil teratas dari Google Search.');
-  const links = await fetchGoogleTopExcelUrls(query);
-  logStep(`Ditemukan ${links.length} link Excel untuk diproses.`);
+  const links = await fetchGoogleTopResultUrls(query, fileType);
+  logStep(`Ditemukan ${links.length} URL hasil untuk diproses.`);
 
   const extractedRows = [];
+  const canAnalyzeExcel = !fileType || EXCEL_TYPES.includes(fileType);
   for (const url of links) {
-    logStep(`Mengunduh & mengekstrak file: ${url}`);
+    const isExcelUrl = /\.xlsx?(\?|$)/i.test(url);
+    if (!canAnalyzeExcel || !isExcelUrl) {
+      logStep(`Lewati analisis konten (bukan file excel): ${url}`);
+      continue;
+    }
+
+    logStep(`Mengunduh & mengekstrak file excel: ${url}`);
     try {
       const rows = await fetchExcelAsRows(url);
       const relevantRows = buildRelevantRows({ rows, keyword, target, sourceUrl: url });
@@ -213,7 +244,7 @@ async function runGoogleDork({ keyword: rawKeyword, target: rawTarget, domain: r
     searchUrl,
     links,
     processLog,
-    output: formatProfessionalReport({ query, searchUrl, links, extractedRows })
+    output: formatProfessionalReport({ query, searchUrl, links, extractedRows, fileType })
   };
 }
 
