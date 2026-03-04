@@ -64,15 +64,67 @@ function matchesFileType(url, fileType) {
 
 function extractGoogleResultUrls(html) {
   const links = [];
-  const regex = /<a\s+href="\/url\?q=([^"&]+)[^"]*"/g;
-  let match = regex.exec(html);
 
-  while (match) {
-    const raw = decodeURIComponent(match[1]);
-    if (/^https?:\/\//i.test(raw) && !raw.includes('google.com')) {
-      links.push(raw);
+  const decodeHtmlEntities = (value) =>
+    String(value || '')
+      .replace(/&amp;/gi, '&')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>');
+
+  const isGoogleOwnedUrl = (candidateUrl) => {
+    try {
+      const host = new URL(candidateUrl).hostname.toLowerCase();
+      return (
+        host === 'google.com' ||
+        host.endsWith('.google.com') ||
+        host === 'google.co.id' ||
+        host.endsWith('.google.co.id') ||
+        host.endsWith('.googleusercontent.com') ||
+        host.endsWith('.gstatic.com')
+      );
+    } catch (_) {
+      return true;
     }
-    match = regex.exec(html);
+  };
+
+  const pushIfValid = (url) => {
+    if (!/^https?:\/\//i.test(url)) return;
+    if (isGoogleOwnedUrl(url)) return;
+    links.push(url);
+  };
+
+  const hrefRegex = /<a\b[^>]*\bhref\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/gi;
+  let hrefMatch = hrefRegex.exec(html);
+
+  while (hrefMatch) {
+    const href = decodeHtmlEntities(hrefMatch[1] || hrefMatch[2] || hrefMatch[3] || '').trim();
+    if (href.startsWith('/url?')) {
+      try {
+        const parsed = new URL(`https://www.google.com${href}`);
+        const externalUrl = parsed.searchParams.get('q') || parsed.searchParams.get('url');
+        if (externalUrl) {
+          pushIfValid(decodeURIComponent(externalUrl));
+        }
+      } catch (_) {
+        // abaikan href yang tidak valid
+      }
+    } else {
+      pushIfValid(href);
+    }
+    hrefMatch = hrefRegex.exec(html);
+  }
+
+  // fallback jika format HTML tidak menyimpan link hasil pada elemen <a href>
+  if (links.length === 0) {
+    const fallbackRegex = /\/url\?[^"'\s<>]*?(?:[?&](?:q|url)=)([^&"'\s<>]+)/gi;
+    let fallbackMatch = fallbackRegex.exec(html);
+    while (fallbackMatch) {
+      const rawUrl = decodeHtmlEntities(fallbackMatch[1]);
+      pushIfValid(decodeURIComponent(rawUrl));
+      fallbackMatch = fallbackRegex.exec(html);
+    }
   }
 
   return [...new Set(links)];
