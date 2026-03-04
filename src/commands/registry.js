@@ -17,8 +17,8 @@ function getHelpMessage() {
     `${env.BOT_PREFIX}maigret <username>`,
     `${env.BOT_PREFIX}instaloader <username>`,
     `${env.BOT_PREFIX}theharvester <domain>`,
-    `${env.BOT_PREFIX}dorkdoc <keyword> (pencarian luas, file xls)`,
-    `${env.BOT_PREFIX}dork <keyword> (pencarian luas, file xls)`,
+    `${env.BOT_PREFIX}dorkdoc <keyword> (pencarian luas tanpa batasan filetype)`,
+    `${env.BOT_PREFIX}dork <keyword> (pencarian luas tanpa batasan filetype)`,
     `${env.BOT_PREFIX}dorkdoc <keyword> <target|-> <domain|-> <tipe_dokumen>`,
     `${env.BOT_PREFIX}exif (reply gambar)`,
     `${env.BOT_PREFIX}help`,
@@ -179,19 +179,19 @@ async function handleCommand(text) {
     const useWidePreset = rest.length === 1;
     const target = useWidePreset ? '' : targetInput;
     const domain = useWidePreset ? '' : domainInput;
-    const fileType = useWidePreset ? 'xls' : fileTypeInput;
+    const fileType = useWidePreset ? '' : fileTypeInput;
 
     const isInvalidWideMode = useWidePreset && (!keyword || extra.length > 0);
-    const isInvalidFullMode = !useWidePreset && (!keyword || !fileType || extra.length > 0);
+    const isInvalidFullMode = !useWidePreset && (!keyword || !fileTypeInput || extra.length > 0);
 
     if (isInvalidWideMode || isInvalidFullMode) {
       return [
         `❌ *Informasi Proses Google Dork*`,
         'Status: *Argumen tidak lengkap atau format tidak valid*',
         '',
-        `Format cepat: ${env.BOT_PREFIX}dorkdoc <keyword> (pencarian luas + file xls)`,
-        `Gunakan format: ${env.BOT_PREFIX}dorkdoc <keyword> <target|-> <domain|-> <tipe_dokumen>`,
-        `Alias: ${env.BOT_PREFIX}dork <keyword> <target|-> <domain|-> <tipe_dokumen>`,
+        `Format cepat: ${env.BOT_PREFIX}dorkdoc <keyword> (pencarian luas tanpa filetype)`,
+        `Gunakan format: ${env.BOT_PREFIX}dorkdoc <keyword> <target|-> <domain|-> <tipe_dokumen|->`,
+        `Alias: ${env.BOT_PREFIX}dork <keyword> <target|-> <domain|-> <tipe_dokumen|->`,
         `Tipe dokumen preset: ${DOCUMENT_TYPES.join(', ')}`,
         env.GOOGLE_DORK_DEFAULT_SITE
           ? `Gunakan '-' pada domain untuk memakai default: ${env.GOOGLE_DORK_DEFAULT_SITE}`
@@ -208,7 +208,7 @@ async function handleCommand(text) {
         `Keyword: *${result.keyword}*`,
         `Target: *${result.target || '-'}*`,
         `Domain: *${result.domain || '-'}*`,
-        `Tipe dokumen: *${result.fileType}*`,
+        `Tipe dokumen: *${result.fileType || '-'}*`,
         'Status: *Query berhasil dibuat*',
         '',
         '*Ringkasan hasil eksekusi:*',
