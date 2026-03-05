@@ -347,6 +347,49 @@ async function startWhatsAppClient() {
     }
   }
 
+  async function sendCommandResponse(remoteJid, incoming, response) {
+    if (!response) return;
+
+    if (typeof response === 'string') {
+      await sock.sendMessage(remoteJid, { text: response }, { quoted: incoming });
+      return;
+    }
+
+    const text = String(response.text || '').trim();
+    if (text) {
+      await sock.sendMessage(remoteJid, { text }, { quoted: incoming });
+    }
+
+    const attachments = Array.isArray(response.attachments) ? response.attachments : [];
+    for (const attachment of attachments) {
+      if (!attachment || attachment.type !== 'document' || !attachment.path) continue;
+
+      try {
+        const fileBuffer = await fs.readFile(attachment.path);
+        await sock.sendMessage(
+          remoteJid,
+          {
+            document: fileBuffer,
+            fileName: attachment.fileName || 'attachment',
+            mimetype: attachment.mimetype || 'application/octet-stream'
+          },
+          { quoted: incoming }
+        );
+      } catch (error) {
+        logger.error(
+          {
+            err: error,
+            remoteJid,
+            path: attachment.path,
+            fileName: attachment.fileName || '-',
+            recoveryAction: 'send-attachment-failed'
+          },
+          'Failed sending command attachment'
+        );
+      }
+    }
+  }
+
   function getQuotedImageSource(incoming) {
     const quotedMessage = incoming.message?.extendedTextMessage?.contextInfo?.quotedMessage;
     const hasImage = Boolean(quotedMessage?.imageMessage);
@@ -502,6 +545,21 @@ async function startWhatsAppClient() {
           title: 'Google Dork',
           targetLabel: 'keyword',
           progressText: 'Sedang membentuk query dan mengambil hasil dokumen sesuai parameter'
+        },
+        minim: {
+          title: 'Mini-Maltego OSINT',
+          targetLabel: 'seed',
+          progressText: 'Sedang memproses domain/email/username dan membangun graph artefak'
+        },
+        miniosint: {
+          title: 'Mini-Maltego OSINT',
+          targetLabel: 'seed',
+          progressText: 'Sedang memproses domain/email/username dan membangun graph artefak'
+        },
+        maltego: {
+          title: 'Mini-Maltego OSINT',
+          targetLabel: 'seed',
+          progressText: 'Sedang memproses domain/email/username dan membangun graph artefak'
         }
       };
 
@@ -534,9 +592,7 @@ async function startWhatsAppClient() {
       }
 
       const response = await handleCommand(text);
-      if (!response) return;
-
-      await sock.sendMessage(remoteJid, { text: response }, { quoted: incoming });
+      await sendCommandResponse(remoteJid, incoming, response);
     } catch (error) {
       if (isPreKeyIssue(error)) {
         await runPreKeyRecovery({

@@ -38,6 +38,11 @@ const schema = z.object({
   EXIFTOOL_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
   EXIF_CONFIRMATION_TTL_MS: z.coerce.number().int().positive().default(300000),
   GOOGLE_DORK_DOC_TYPES: z.string().default('pdf,doc,docx,xls,xlsx,ppt,pptx'),
+  MINI_MALTEGO_WORKDIR: z.string().default('./runtime/mini-maltego'),
+  MINI_MALTEGO_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
+  MINI_MALTEGO_MAX_OUTPUT_CHARS: z.coerce.number().int().positive().default(3500),
+  MINI_MALTEGO_USER_AGENT: z.string().default('mini-maltego-osint/1.0'),
+  MINI_MALTEGO_SOCIAL_SITES: z.string().default('[{"name":"GitHub","url_template":"https://github.com/{username}"},{"name":"Instagram","url_template":"https://www.instagram.com/{username}/"},{"name":"TikTok","url_template":"https://www.tiktok.com/@{username}"},{"name":"X","url_template":"https://x.com/{username}"},{"name":"YouTube","url_template":"https://www.youtube.com/@{username}"}]'),
   GOOGLE_DORK_DEFAULT_SITE: z.string().default(''),
   GOOGLE_DORK_MAX_RESULTS: z.coerce.number().int().positive().default(20),
   WHATSAPP_SEND_QR_TO_TERMINAL: z
@@ -60,10 +65,22 @@ env.HOLEHE_WORKDIR = resolveFromCwd(env.HOLEHE_WORKDIR);
 env.MAIGRET_WORKDIR = resolveFromCwd(env.MAIGRET_WORKDIR);
 env.INSTALOADER_WORKDIR = resolveFromCwd(env.INSTALOADER_WORKDIR);
 env.THEHARVESTER_WORKDIR = resolveFromCwd(env.THEHARVESTER_WORKDIR);
+env.MINI_MALTEGO_WORKDIR = resolveFromCwd(env.MINI_MALTEGO_WORKDIR);
 env.GOOGLE_DORK_DOC_TYPES = parseNormalizedCsv(env.GOOGLE_DORK_DOC_TYPES);
 if (env.GOOGLE_DORK_DOC_TYPES.length === 0) {
   env.GOOGLE_DORK_DOC_TYPES = parseNormalizedCsv('pdf,doc,docx,xls,xlsx,ppt,pptx');
 }
 env.GOOGLE_DORK_DEFAULT_SITE = String(env.GOOGLE_DORK_DEFAULT_SITE || '').trim().toLowerCase();
+
+try {
+  const parsedSocialSites = JSON.parse(env.MINI_MALTEGO_SOCIAL_SITES);
+  env.MINI_MALTEGO_SOCIAL_SITES = Array.isArray(parsedSocialSites)
+    ? parsedSocialSites
+        .map((site) => ({ name: String(site?.name || '').trim(), url_template: String(site?.url_template || '').trim() }))
+        .filter((site) => site.name && site.url_template)
+    : [];
+} catch {
+  env.MINI_MALTEGO_SOCIAL_SITES = [];
+}
 
 module.exports = { env };
