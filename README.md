@@ -59,6 +59,7 @@ npm start
 - `!ping`
 - `!socmint <handle_csv|-> <email_csv|-> <link_csv|-> <keyword_csv|-> <hashtag_csv|->` (social media information gathering: identity + sockpuppet + issue mapping)
 - `!xissue <keyword_csv> <window_menit(15-1440)|60>` (Twitter/X Issue Hunter Jatim: clustering issue + burst + network export)
+- `!ttissue <keyword_csv> <window_menit(15-1440)|60>` (TikTok Issue Hunter Jatim via RapidAPI: clustering issue + burst + network export)
 - `!sherlock <username>`
 - `!holehe <email>`
 - `!maigret <username>`
@@ -224,6 +225,12 @@ MINI_MALTEGO_SOCIAL_SITES=[{"name":"GitHub","url_template":"https://github.com/{
 X_BEARER_TOKEN=
 PG_URL=postgres://user:pass@host:5432/db
 X_ISSUE_HUNTER_WORKDIR=./runtime/x-issue-hunter
+TIKTOK_RAPIDAPI_KEY=
+TIKTOK_RAPIDAPI_HOST=tiktok-api23.p.rapidapi.com
+TIKTOK_RAPIDAPI_BASE_URL=https://tiktok-api23.p.rapidapi.com
+TIKTOK_RAPIDAPI_SEARCH_PATH=/api/search/video
+TIKTOK_RAPIDAPI_MAX_COUNT=20
+TIKTOK_ISSUE_HUNTER_WORKDIR=./runtime/tiktok-issue-hunter
 ```
 
 ### Twitter/X Issue Hunter (Jatim)
@@ -242,6 +249,23 @@ Pipeline memakai X API v2 resmi (filtered stream/recent search), tanpa scraping,
 
 Skema PostgreSQL tersedia di `sql/x_issue_hunter_schema.sql`.
 Dokumentasi implementasi ada di `docs/twitter-issue-hunter.md`.
+
+### TikTok Issue Hunter (Jatim via RapidAPI)
+
+Perintah:
+
+```text
+!ttissue bansos,pilkada,jalanrusak 60
+```
+
+Pipeline memakai RapidAPI `tiktok-api23` (`/api/search/video`) dan mengekspor artefak graph:
+
+- `issues.json`
+- `nodes.csv`
+- `edges.csv`
+
+Skema PostgreSQL tersedia di `sql/tiktok_issue_hunter_schema.sql`.
+Dokumentasi implementasi ada di `docs/tiktok-issue-hunter.md`.
 
 
 ### Social Media Information Gathering menu
