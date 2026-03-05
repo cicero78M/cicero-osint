@@ -4,6 +4,7 @@ const { runMaigret } = require('../services/maigret');
 const { runInstaloader } = require('../services/instaloader');
 const { runTheHarvester } = require('../services/theharvester');
 const { runGoogleDork, DOCUMENT_TYPES } = require('../services/googleDork');
+const { runMiniMaltego } = require('../services/miniMaltego');
 const { env } = require('../config/env');
 
 function getHelpMessage() {
@@ -21,6 +22,7 @@ function getHelpMessage() {
     `${env.BOT_PREFIX}dork <keyword> (pencarian luas tanpa batasan filetype)`,
     `${env.BOT_PREFIX}dorkdoc <keyword> <target|-> <domain|-> <tipe_dokumen>`,
     `${env.BOT_PREFIX}exif (reply gambar)`,
+    `${env.BOT_PREFIX}minim <domain|-> <email_csv|-> <username_csv|-> (alias: miniosint, maltego)`,
     `${env.BOT_PREFIX}help`,
     '',
     `Tipe dokumen preset: ${DOCUMENT_TYPES.join(', ')}`,
@@ -242,6 +244,55 @@ async function handleCommand(text) {
         `Status: *${error?.message || 'Proses selesai dengan kegagalan'}*`,
         '',
         'Silakan periksa kembali parameter lalu coba ulangi perintah.'
+      ].join('\n');
+    }
+  }
+
+
+  if (command === 'minim' || command === 'miniosint' || command === 'maltego') {
+    const [domain, emails, handles, ...extra] = rest;
+    if (extra.length > 0) {
+      return [
+        '❌ *Informasi Proses Mini-Maltego OSINT*',
+        'Status: *Format argumen tidak valid*',
+        '',
+        `Gunakan format: ${env.BOT_PREFIX}minim <domain|-> <email_csv|-> <username_csv|->`,
+        'Contoh: !minim example.com admin@example.com,jane@example.com john,jane_doe'
+      ].join('\n');
+    }
+
+    try {
+      const result = await runMiniMaltego({ domain, emails, handles });
+      return [
+        '✅ *Mini-Maltego OSINT selesai*',
+        `Case ID: *${result.caseId}*`,
+        `Output folder: ${result.outDir}`,
+        `JSON graph: ${result.jsonPath}`,
+        `Neo4j nodes CSV: ${result.nodesPath}`,
+        `Neo4j edges CSV: ${result.edgesPath}`,
+        '',
+        '*Ringkasan:*',
+        '```',
+        result.output || 'Tidak ada ringkasan.',
+        '```'
+      ].join('\n');
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Mini-Maltego command failed:', {
+        domain,
+        emails,
+        handles,
+        error: error?.stack || error?.message || String(error)
+      });
+
+      return [
+        '❌ *Informasi Proses Mini-Maltego OSINT*',
+        `Domain: *${domain || '-'}*`,
+        `Emails: *${emails || '-'}*`,
+        `Usernames: *${handles || '-'}*`,
+        `Status: *${error?.message || 'Proses selesai dengan kegagalan'}*`,
+        '',
+        'Cek format input dan ulangi command.'
       ].join('\n');
     }
   }

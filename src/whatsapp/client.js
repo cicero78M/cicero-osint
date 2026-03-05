@@ -502,6 +502,21 @@ async function startWhatsAppClient() {
           title: 'Google Dork',
           targetLabel: 'keyword',
           progressText: 'Sedang membentuk query dan mengambil hasil dokumen sesuai parameter'
+        },
+        minim: {
+          title: 'Mini-Maltego OSINT',
+          targetLabel: 'seed',
+          progressText: 'Sedang memproses domain/email/username dan membangun graph artefak'
+        },
+        miniosint: {
+          title: 'Mini-Maltego OSINT',
+          targetLabel: 'seed',
+          progressText: 'Sedang memproses domain/email/username dan membangun graph artefak'
+        },
+        maltego: {
+          title: 'Mini-Maltego OSINT',
+          targetLabel: 'seed',
+          progressText: 'Sedang memproses domain/email/username dan membangun graph artefak'
         }
       };
 
