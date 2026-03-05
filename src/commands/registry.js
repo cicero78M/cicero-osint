@@ -6,7 +6,6 @@ const { runTheHarvester } = require('../services/theharvester');
 const { runGoogleDork, DOCUMENT_TYPES } = require('../services/googleDork');
 const { runMiniMaltego } = require('../services/miniMaltego');
 const { runSocialMediaIntel } = require('../services/socialMediaIntel');
-const { getSocialMediaIssueHunterMenu } = require('../services/socialMediaIssueHunter');
 const { env } = require('../config/env');
 
 function getHelpMessage() {
@@ -26,7 +25,6 @@ function getHelpMessage() {
     `${env.BOT_PREFIX}exif (reply gambar)`,
     `${env.BOT_PREFIX}minim <domain|-> <email_csv|-> <username_csv|-> (alias: miniosint, maltego)`,
     `${env.BOT_PREFIX}socmint <handle_csv|-> <email_csv|-> <link_csv|-> <keyword_csv|-> <hashtag_csv|->`,
-    `${env.BOT_PREFIX}issuehunter (alias: isuhunter, smissue) [TikTok Issue Hunter]`,
     `${env.BOT_PREFIX}help`,
     '',
     `Tipe dokumen preset: ${DOCUMENT_TYPES.join(', ')}`,
@@ -359,11 +357,6 @@ async function handleCommand(text) {
         'Cek format input dan ulangi command.'
       ].join('\n');
     }
-  }
-
-
-  if (command === 'issuehunter' || command === 'isuhunter' || command === 'smissue') {
-    return getSocialMediaIssueHunterMenu();
   }
 
   if (command === 'theharvester') {
