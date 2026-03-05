@@ -57,6 +57,7 @@ npm start
 - `!help`
 - `!minim <domain|-> <email_csv|-> <username_csv|->` (mini-Maltego OSINT + export JSON/Neo4j CSV)
 - `!ping`
+- `!socmint <handle_csv|-> <email_csv|-> <link_csv|-> <keyword_csv|-> <hashtag_csv|->` (social media information gathering: identity + sockpuppet + issue mapping)
 - `!sherlock <username>`
 - `!holehe <email>`
 - `!maigret <username>`
@@ -77,6 +78,7 @@ Contoh:
 !dorkdoc 3575022502870001
 !dorkdoc payroll login example.com pdf
 !dork breach invoice - -
+!socmint cicero_admin,cicero.ops - linktr.ee/cicero pemilu,bansos #pemilu,#politik
 ```
 
 ### Tuning theHarvester (default lebih tajam)
@@ -216,3 +218,36 @@ MINI_MALTEGO_MAX_OUTPUT_CHARS=3500
 MINI_MALTEGO_USER_AGENT=mini-maltego-osint/1.0
 MINI_MALTEGO_SOCIAL_SITES=[{"name":"GitHub","url_template":"https://github.com/{username}"},{"name":"Instagram","url_template":"https://www.instagram.com/{username}/"},{"name":"TikTok","url_template":"https://www.tiktok.com/@{username}"},{"name":"X","url_template":"https://x.com/{username}"},{"name":"YouTube","url_template":"https://www.youtube.com/@{username}"}]
 ```
+
+
+### Social Media Information Gathering menu
+
+Menu `!socmint` menjalankan orkestrasi mini-Maltego khusus social-media dengan 3 jalur paralel:
+
+1. **Identity & Account Discovery**: Sherlock (broad sweep) -> Maigret (validasi).
+2. **Sockpuppet Correlation Engine**: scoring confidence + reason codes (`same_bio_link`, `handle_pattern`, `exists_signal_only`, dst).
+3. **Issue Mapping**: buat graph issue dari seed keyword/hashtag untuk pemetaan narasi awal.
+
+Format command:
+
+```text
+!socmint <handle_csv|-> <email_csv|-> <link_csv|-> <keyword_csv|-> <hashtag_csv|->
+```
+
+Contoh:
+
+```text
+!socmint john_doe,jane_doe - linktr.ee/john pemilu,bansos #pemilu,#politik
+!socmint - admin@example.com example.org hoax,disinformasi #breaking
+```
+
+Output tersimpan ke folder:
+
+- `runtime/mini-maltego/social-media/<case-id>/social-media-intel.json`
+
+Skema output utama:
+
+- `entities_account`
+- `entities_issue_cluster`
+- `edges` (`LIKELY_SAME_OPERATOR`, `POSTS_ABOUT`, dll)
+- `evidence_store` (tool, raw_path, timestamp, extracted_json)
