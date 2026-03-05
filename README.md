@@ -59,7 +59,9 @@ npm start
 - `!ping`
 - `!socmint <handle_csv|-> <email_csv|-> <link_csv|-> <keyword_csv|-> <hashtag_csv|->` (social media information gathering: identity + sockpuppet + issue mapping)
 - `!xissue <keyword_csv> <window_menit(15-1440)|60>` (Twitter/X Issue Hunter Jatim: clustering issue + burst + network export)
-- `!ttissue <keyword_csv> <window_menit(15-1440)|60>` (TikTok Issue Hunter Jatim via RapidAPI: clustering issue + burst + network export)
+- `!ttmenu` (lihat submenu TikTok Issue Hunter)
+- `!ttissue <keyword_csv> <window_menit(15-1440)|60>` (default submenu `all`)
+- `!ttissue <submenu:all|crawl|issue|sockpuppet|graph> <keyword_csv> <window_menit(15-1440)|60>`
 - `!sherlock <username>`
 - `!holehe <email>`
 - `!maigret <username>`
@@ -255,7 +257,9 @@ Dokumentasi implementasi ada di `docs/twitter-issue-hunter.md`.
 Perintah:
 
 ```text
+!ttmenu
 !ttissue bansos,pilkada,jalanrusak 60
+!ttissue sockpuppet bansos,pilkada,jalanrusak 60
 ```
 
 Pipeline memakai RapidAPI `tiktok-api23` (`/api/search/video`) dan mengekspor artefak graph:

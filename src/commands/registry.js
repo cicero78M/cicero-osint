@@ -28,7 +28,9 @@ function getHelpMessage() {
     `${env.BOT_PREFIX}minim <domain|-> <email_csv|-> <username_csv|-> (alias: miniosint, maltego)`,
     `${env.BOT_PREFIX}socmint <handle_csv|-> <email_csv|-> <link_csv|-> <keyword_csv|-> <hashtag_csv|->`,
     `${env.BOT_PREFIX}xissue <keyword_csv> <window_menit(15-1440)|60>`,
+    `${env.BOT_PREFIX}ttmenu`,
     `${env.BOT_PREFIX}ttissue <keyword_csv> <window_menit(15-1440)|60>`,
+    `${env.BOT_PREFIX}ttissue <submenu:all|crawl|issue|sockpuppet|graph> <keyword_csv> <window_menit(15-1440)|60>`,
     `${env.BOT_PREFIX}help`,
     '',
     `Tipe dokumen preset: ${DOCUMENT_TYPES.join(', ')}`,
@@ -365,42 +367,83 @@ async function handleCommand(text) {
 
 
 
+
+  if (command === 'ttmenu' || command === 'tiktokmenu' || command === 'tthuntermenu') {
+    return [
+      '🎯 *TikTok Issue Hunter Menu*',
+      '',
+      '*Submenu tersedia:*',
+      `1) ${env.BOT_PREFIX}ttissue all <keyword_csv> <window_menit|60>`,
+      '   Jalankan pipeline lengkap (crawler + issue + sockpuppet + graph).',
+      `2) ${env.BOT_PREFIX}ttissue crawl <keyword_csv> <window_menit|60>`,
+      '   Hanya ingest data TikTok dari RapidAPI ke PostgreSQL.',
+      `3) ${env.BOT_PREFIX}ttissue issue <keyword_csv> <window_menit|60>`,
+      '   Jalankan deteksi burst issue + mapping post ke issue.',
+      `4) ${env.BOT_PREFIX}ttissue sockpuppet <keyword_csv> <window_menit|60>`,
+      '   Jalankan deteksi cluster sockpuppet.',
+      `5) ${env.BOT_PREFIX}ttissue graph <keyword_csv> <window_menit|60>`,
+      '   Export graph intelligence (issues.json, nodes.csv, edges.csv).',
+      '',
+      '*Format lama tetap didukung:*',
+      `- ${env.BOT_PREFIX}ttissue <keyword_csv> <window_menit|60> (default: all)`,
+      '',
+      `Contoh: ${env.BOT_PREFIX}ttissue sockpuppet polisi,tilang,surabaya 60`
+    ].join('\n');
+  }
+
   if (command === 'ttissue' || command === 'tiktokissue' || command === 'tthunter') {
-    const [keywords, windowMinutesInput, ...extra] = rest;
+    const SUBMENUS = new Set(['all', 'crawl', 'issue', 'sockpuppet', 'graph']);
+    let submenu = 'all';
+    let keywords;
+    let windowMinutesInput;
+    let extra;
+
+    if (rest.length >= 1 && SUBMENUS.has(String(rest[0] || '').toLowerCase())) {
+      submenu = String(rest[0]).toLowerCase();
+      [keywords, windowMinutesInput, ...extra] = rest.slice(1);
+    } else {
+      [keywords, windowMinutesInput, ...extra] = rest;
+    }
+
     if (!keywords || extra.length > 0) {
       return [
         '❌ *Informasi Proses TikTok Issue Hunter*',
         'Status: *Format argumen tidak valid*',
         '',
         `Gunakan format: ${env.BOT_PREFIX}ttissue <keyword_csv> <window_menit(15-1440)|60>`,
-        `Contoh: ${env.BOT_PREFIX}ttissue bansos,pilkada,macet 60`
+        `Atau: ${env.BOT_PREFIX}ttissue <submenu:all|crawl|issue|sockpuppet|graph> <keyword_csv> <window_menit|60>`,
+        `Lihat detail submenu: ${env.BOT_PREFIX}ttmenu`
       ].join('\n');
     }
 
     try {
       // eslint-disable-next-line no-console
       console.info('TikTok issue hunter command started:', {
+        submenu,
         keywords,
         windowMinutesInput: windowMinutesInput || 60
       });
 
-      const result = await runTikTokIssueHunter({ keywords, windowMinutes: windowMinutesInput || 60 });
+      const result = await runTikTokIssueHunter({ keywords, windowMinutes: windowMinutesInput || 60, mode: submenu });
 
       // eslint-disable-next-line no-console
       console.info('TikTok issue hunter command completed:', {
+        submenu,
         caseId: result.caseId,
         issues: result.issues.length,
         inserted: result.ingestion.inserted,
-        actorNetworkEdges: result.actorNetwork.length
+        actorNetworkEdges: result.actorNetwork.length,
+        sockpuppetClusters: result.sockpuppetClusters.length
       });
       const issueLines = result.issues.slice(0, 5).map((issue, idx) => `${idx + 1}. ${issue.label} | burst=${issue.burstScore} | size=${issue.size}`);
 
       return [
-        '✅ *TikTok Issue Hunter selesai*',
+        `✅ *TikTok Issue Hunter selesai (submenu: ${submenu})*`,
         `Case ID: *${result.caseId}*`,
         `Ingestion (window ${result.ingestion.windowMinutes}m): ${result.ingestion.inserted} post tersimpan`,
         `Issue terdeteksi: ${result.issues.length}`,
         `Actor network edges: ${result.actorNetwork.length}`,
+        `Sockpuppet cluster: ${result.sockpuppetClusters.length}`,
         '',
         '*Top issue cluster:*',
         ...(issueLines.length ? issueLines : ['- Belum ada cluster issue yang memenuhi threshold minimum.']),
@@ -410,11 +453,12 @@ async function handleCommand(text) {
         `- nodes.csv: ${result.exports.nodesCsv}`,
         `- edges.csv: ${result.exports.edgesCsv}`,
         '',
-        '_Catatan: sumber data berasal dari RapidAPI tiktok-api23 dan dibatasi untuk isu wilayah Jawa Timur (Jatim)._'
+        '_Catatan: sumber data berasal dari RapidAPI tiktok-api23 dan dibatasi untuk isu wilayah Jawa Timur (Jatim)._' 
       ].join('\n');
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('TikTok issue hunter command failed:', {
+        submenu,
         keywords,
         windowMinutesInput,
         error: error?.stack || error?.message || String(error)
@@ -422,6 +466,7 @@ async function handleCommand(text) {
 
       return [
         '❌ *Informasi Proses TikTok Issue Hunter*',
+        `Submenu: *${submenu || 'all'}*`,
         `Keywords: *${keywords || '-'}*`,
         `Window: *${windowMinutesInput || 60}* menit`,
         `Status: *${error?.message || 'Proses selesai dengan kegagalan'}*`,
@@ -430,6 +475,7 @@ async function handleCommand(text) {
       ].join('\n');
     }
   }
+
 
 
   if (command === 'xissue' || command === 'twitterissue' || command === 'xhunter') {
