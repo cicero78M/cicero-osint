@@ -11,6 +11,11 @@ const HANDLE_REGEX = /^[a-z0-9._-]{1,50}$/i;
 const SCRAPE_EMAIL_REGEX = /[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/g;
 const HREF_REGEX = /href\s*=\s*["']([^"']+)["']/gi;
 
+function logStage(stage, details = {}) {
+  // eslint-disable-next-line no-console
+  console.info('[mini-maltego]', { stage, ...details });
+}
+
 class Graph {
   constructor(caseId) {
     this.caseId = caseId;
@@ -302,6 +307,12 @@ async function runMiniMaltego({ domain, emails, handles }) {
   const normalizedEmails = sanitizeEmails(emails);
   const normalizedHandles = sanitizeHandles(handles);
 
+  logStage('seed.normalized', {
+    domain: normalizedDomain || '-',
+    emails: normalizedEmails.length,
+    usernames: normalizedHandles.length
+  });
+
   if (!normalizedDomain && normalizedEmails.length === 0 && normalizedHandles.length === 0) {
     throw new Error('Minimal isi salah satu seed: domain / emails / usernames.');
   }
@@ -309,21 +320,41 @@ async function runMiniMaltego({ domain, emails, handles }) {
   const caseId = `case-${Date.now()}`;
   const graph = new Graph(caseId);
 
-  if (normalizedDomain) await scanDomain(normalizedDomain, graph);
+  logStage('case.start', { caseId });
+
+  if (normalizedDomain) {
+    logStage('scan.domain.start', { caseId, domain: normalizedDomain });
+    await scanDomain(normalizedDomain, graph);
+    logStage('scan.domain.done', { caseId, domain: normalizedDomain });
+  }
   for (const email of normalizedEmails) {
+    logStage('scan.email.start', { caseId, email });
     // eslint-disable-next-line no-await-in-loop
     await scanEmail(email, graph);
+    logStage('scan.email.done', { caseId, email });
   }
   for (const handle of normalizedHandles) {
+    logStage('scan.social.start', { caseId, username: handle });
     // eslint-disable-next-line no-await-in-loop
     await scanSocial(handle, graph);
+    logStage('scan.social.done', { caseId, username: handle });
   }
 
+  logStage('sockpuppet.scoring.start', { caseId });
   scoreSockpuppet(graph);
+  logStage('sockpuppet.scoring.done', { caseId });
 
   const caseDir = path.join(env.MINI_MALTEGO_WORKDIR, `${caseId}`);
+  logStage('export.start', { caseId, outDir: caseDir });
   const artifacts = await exportArtifacts(graph, caseDir);
   const summary = `Nodes=${graph.nodes().length}, Edges=${graph.edges.length}, Domain=${normalizedDomain || '-'}, Emails=${normalizedEmails.length}, Usernames=${normalizedHandles.length}`;
+
+  logStage('case.done', {
+    caseId,
+    nodes: graph.nodes().length,
+    edges: graph.edges.length,
+    outDir: caseDir
+  });
 
   return {
     caseId,

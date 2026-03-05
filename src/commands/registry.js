@@ -22,7 +22,7 @@ function getHelpMessage() {
     `${env.BOT_PREFIX}dork <keyword> (pencarian luas tanpa batasan filetype)`,
     `${env.BOT_PREFIX}dorkdoc <keyword> <target|-> <domain|-> <tipe_dokumen>`,
     `${env.BOT_PREFIX}exif (reply gambar)`,
-    `${env.BOT_PREFIX}minim <domain|-> <email_csv|-> <username_csv|->`,
+    `${env.BOT_PREFIX}minim <domain|-> <email_csv|-> <username_csv|-> (alias: miniosint, maltego)`,
     `${env.BOT_PREFIX}help`,
     '',
     `Tipe dokumen preset: ${DOCUMENT_TYPES.join(', ')}`,
