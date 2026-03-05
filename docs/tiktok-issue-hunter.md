@@ -26,16 +26,20 @@ Filter otomatis memprioritaskan konten dengan term regional Jatim:
 
 Sehingga issue yang diproses tetap relevan untuk pipeline monitoring Jatim.
 
-## WhatsApp command baru
+## WhatsApp command + submenu
 
 ```text
+!ttmenu
 !ttissue <keyword_csv> <window_menit(15-1440)|60>
+!ttissue <submenu:all|crawl|issue|sockpuppet|graph> <keyword_csv> <window_menit(15-1440)|60>
 ```
 
 Contoh:
 
 ```text
 !ttissue bansos,pilkada,jalanrusak 60
+!ttissue crawl polisi,tilang,surabaya 60
+!ttissue sockpuppet bansos,pilkada 120
 ```
 
 ## Prasyarat env
@@ -78,3 +82,12 @@ Semua file berada di:
   - `GET /api/search/video`
 - Retry `429` menggunakan exponential backoff di `requestWithRetry`.
 - Untuk throughput tinggi, disarankan worker async berbasis queue (Redis/BullMQ) untuk pemrosesan lanjutan.
+
+## Sockpuppet detection
+
+Engine menilai kandidat akun berdasarkan:
+
+- overlap hashtag
+- kedekatan waktu posting (<= 5 menit)
+
+Hasil disimpan ke tabel `tiktok_sockpuppet_cluster` dan `tiktok_sockpuppet_member`.

@@ -59,6 +59,16 @@ function tokenize(text) {
     .filter((token) => token.length >= 3 && !token.startsWith('@') && !token.startsWith('#'));
 }
 
+function extractEntities(text) {
+  const normalized = String(text || '');
+  const hashtags = (normalized.match(/#\w+/g) || []).map((tag) => tag.toLowerCase());
+  const mentions = (normalized.match(/@\w+/g) || []).map((tag) => tag.toLowerCase());
+  return {
+    hashtags: [...new Set(hashtags)],
+    mentions: [...new Set(mentions)]
+  };
+}
+
 function jaccard(a, b) {
   const sa = new Set(a);
   const sb = new Set(b);
@@ -130,6 +140,10 @@ function extractPost(item) {
     shareCount: Number(stats?.share_count || stats?.shareCount || stats?.shares || 0),
     playCount: Number(stats?.play_count || stats?.playCount || stats?.views || 0),
     hashtags,
+    mentions: extractEntities(desc).mentions,
+    followerCount: Number(author?.follower_count || author?.followerCount || author?.fans || author?.fansCount || 0),
+    followingCount: Number(author?.following_count || author?.followingCount || author?.following || 0),
+    videoCount: Number(author?.aweme_count || author?.videoCount || author?.video_count || 0),
     raw: item
   };
 }
@@ -220,6 +234,35 @@ class TikTokIssueHunter {
             [post.postId, hashtag]
           );
         }
+
+        for (const mention of post.mentions) {
+          // eslint-disable-next-line no-await-in-loop
+          await this.pool.query(
+            `insert into tiktok_mention(post_id, mention) values ($1,$2) on conflict do nothing`,
+            [post.postId, mention]
+          );
+        }
+
+        // eslint-disable-next-line no-await-in-loop
+        await this.pool.query(
+          `insert into tiktok_author(author_id, username, follower_count, following_count, video_count, raw)
+           values ($1,$2,$3,$4,$5,$6)
+           on conflict (author_id) do update set
+           username = excluded.username,
+           follower_count = excluded.follower_count,
+           following_count = excluded.following_count,
+           video_count = excluded.video_count,
+           raw = excluded.raw`,
+          [post.authorId, post.authorUsername, post.followerCount, post.followingCount, post.videoCount, post.raw?.author || null]
+        );
+
+        // eslint-disable-next-line no-await-in-loop
+        await this.pool.query(
+          `insert into tiktok_post_keyword(post_id, keyword)
+           values ($1,$2)
+           on conflict (post_id, keyword) do nothing`,
+          [post.postId, keyword.toLowerCase()]
+        );
 
         inserted += 1;
       }
@@ -312,6 +355,75 @@ class TikTokIssueHunter {
     return result.rows;
   }
 
+  async detectSockpuppet(windowMinutes = 60) {
+    const safeWindow = clamp(windowMinutes, 15, 1440, 60);
+    logProcess('sockpuppet_detection_started', { windowMinutes: safeWindow });
+    const candidateResult = await this.pool.query(
+      `with recent_posts as (
+         select post_id, author_id, author_username, text, created_at
+         from tiktok_post
+         where created_at >= now() - ($1::int || ' minutes')::interval
+       ),
+       hashtag_overlap as (
+         select p1.author_id as author_a,
+                p2.author_id as author_b,
+                count(distinct h1.hashtag)::int as hashtag_overlap
+         from tiktok_hashtag h1
+         join recent_posts p1 on p1.post_id = h1.post_id
+         join tiktok_hashtag h2 on h1.hashtag = h2.hashtag and h1.post_id <> h2.post_id
+         join recent_posts p2 on p2.post_id = h2.post_id and p1.author_id <> p2.author_id
+         group by p1.author_id, p2.author_id
+       ),
+       time_proximity as (
+         select p1.author_id as author_a,
+                p2.author_id as author_b,
+                count(*)::int as near_time_posts
+         from recent_posts p1
+         join recent_posts p2
+           on p1.author_id <> p2.author_id
+          and abs(extract(epoch from (p1.created_at - p2.created_at))) <= 300
+         group by p1.author_id, p2.author_id
+       )
+       select coalesce(h.author_a, t.author_a) as author_a,
+              coalesce(h.author_b, t.author_b) as author_b,
+              coalesce(h.hashtag_overlap, 0)::int as hashtag_overlap,
+              coalesce(t.near_time_posts, 0)::int as near_time_posts
+       from hashtag_overlap h
+       full outer join time_proximity t on h.author_a = t.author_a and h.author_b = t.author_b
+       where coalesce(h.hashtag_overlap, 0) >= 2 or coalesce(t.near_time_posts, 0) >= 2
+       order by hashtag_overlap desc, near_time_posts desc
+       limit 100`,
+      [safeWindow]
+    );
+
+    const clusters = [];
+    for (const candidate of candidateResult.rows) {
+      const score = Number((Math.min(1, (candidate.hashtag_overlap / 10)) * 0.6 + Math.min(1, (candidate.near_time_posts / 10)) * 0.4).toFixed(3));
+      if (score < 0.35) continue;
+
+      const clusterInsert = await this.pool.query(
+        `insert into tiktok_sockpuppet_cluster(score, evidence)
+         values ($1, $2::jsonb)
+         returning cluster_id`,
+        [score, JSON.stringify(candidate)]
+      );
+      const clusterId = clusterInsert.rows[0].cluster_id;
+
+      // eslint-disable-next-line no-await-in-loop
+      await this.pool.query(
+        `insert into tiktok_sockpuppet_member(cluster_id, author_id, similarity)
+         values ($1,$2,$3),($1,$4,$3)
+         on conflict do nothing`,
+        [clusterId, candidate.author_a, score, candidate.author_b]
+      );
+
+      clusters.push({ clusterId, score, ...candidate });
+    }
+
+    logProcess('sockpuppet_detection_completed', { clusters: clusters.length });
+    return clusters;
+  }
+
   async exportGraphArtifacts(caseId) {
     const outDir = path.join(env.TIKTOK_ISSUE_HUNTER_WORKDIR, caseId);
     logProcess('graph_export_started', { caseId, outDir });
@@ -325,15 +437,25 @@ class TikTokIssueHunter {
       nodes.push({ id: `Issue:${issue.issue_id}`, label: 'Issue', name: issue.label, burst_score: issue.burst_score });
 
       const postRows = await this.pool.query(
-        `select p.post_id, p.author_id from tiktok_issue_map im join tiktok_post p on p.post_id = im.post_id where im.issue_id = $1`,
+        `select p.post_id, p.author_id, p.author_username
+         from tiktok_issue_map im
+         join tiktok_post p on p.post_id = im.post_id
+         where im.issue_id = $1`,
         [issue.issue_id]
       );
 
       for (const post of postRows.rows) {
         nodes.push({ id: `Post:${post.post_id}`, label: 'Post' });
-        nodes.push({ id: `Account:${post.author_id}`, label: 'Account' });
+        nodes.push({ id: `Account:${post.author_id}`, label: 'Account', name: post.author_username || post.author_id });
         edges.push({ start: `Account:${post.author_id}`, end: `Post:${post.post_id}`, type: 'POSTED' });
         edges.push({ start: `Post:${post.post_id}`, end: `Issue:${issue.issue_id}`, type: 'IN_ISSUE' });
+
+        const hashtagRows = await this.pool.query(`select hashtag from tiktok_hashtag where post_id = $1`, [post.post_id]);
+        for (const hashtagRow of hashtagRows.rows) {
+          const tag = hashtagRow.hashtag?.startsWith('#') ? hashtagRow.hashtag : `#${hashtagRow.hashtag}`;
+          nodes.push({ id: `Hashtag:${tag}`, label: 'Hashtag', name: tag });
+          edges.push({ start: `Post:${post.post_id}`, end: `Hashtag:${tag}`, type: 'HAS_TAG' });
+        }
       }
     }
 
@@ -355,7 +477,7 @@ class TikTokIssueHunter {
   }
 }
 
-async function runTikTokIssueHunter({ keywords, windowMinutes }) {
+async function runTikTokIssueHunter({ keywords, windowMinutes, mode = 'all' }) {
   const parsedKeywords = parseCsv(keywords);
   if (!parsedKeywords.length) {
     throw new Error('Berikan minimal 1 keyword, contoh: !ttissue bansos,pemilu 60');
@@ -365,23 +487,44 @@ async function runTikTokIssueHunter({ keywords, windowMinutes }) {
   }
 
   const safeWindow = clamp(windowMinutes, 15, 1440, 60);
-  logProcess('pipeline_started', { keywords: parsedKeywords, windowMinutes: safeWindow });
+  const safeMode = ['all', 'crawl', 'issue', 'sockpuppet', 'graph'].includes(String(mode).toLowerCase())
+    ? String(mode).toLowerCase()
+    : 'all';
+  logProcess('pipeline_started', { keywords: parsedKeywords, windowMinutes: safeWindow, mode: safeMode });
 
   const engine = new TikTokIssueHunter();
   try {
-    const ingestion = await engine.ingestRecent(parsedKeywords, safeWindow);
-    const issues = await engine.discoverIssues(safeWindow);
-    const actorNetwork = await engine.buildActorNetwork(safeWindow);
-    const caseId = `ttissue-${Date.now()}`;
-    const exported = await engine.exportGraphArtifacts(caseId);
+    const shouldIngest = safeMode === 'all' || safeMode === 'crawl';
+    const shouldIssue = safeMode === 'all' || safeMode === 'issue';
+    const shouldSockpuppet = safeMode === 'all' || safeMode === 'sockpuppet';
+    const shouldGraph = safeMode === 'all' || safeMode === 'graph';
 
-    logProcess('pipeline_completed', { caseId, inserted: ingestion.inserted, issues: issues.length, actorNetworkEdges: actorNetwork.length });
+    const ingestion = shouldIngest
+      ? await engine.ingestRecent(parsedKeywords, safeWindow)
+      : { inserted: 0, windowMinutes: safeWindow };
+    const issues = shouldIssue ? await engine.discoverIssues(safeWindow) : [];
+    const actorNetwork = shouldIssue ? await engine.buildActorNetwork(safeWindow) : [];
+    const sockpuppetClusters = shouldSockpuppet ? await engine.detectSockpuppet(safeWindow) : [];
+    const caseId = `ttissue-${Date.now()}`;
+    const exported = shouldGraph
+      ? await engine.exportGraphArtifacts(caseId)
+      : { outDir: env.TIKTOK_ISSUE_HUNTER_WORKDIR, issueJson: '-', nodesCsv: '-', edgesCsv: '-' };
+
+    logProcess('pipeline_completed', {
+      caseId,
+      inserted: ingestion.inserted,
+      issues: issues.length,
+      actorNetworkEdges: actorNetwork.length,
+      sockpuppetClusters: sockpuppetClusters.length
+    });
 
     return {
       caseId,
       ingestion,
       issues,
       actorNetwork,
+      sockpuppetClusters,
+      mode: safeMode,
       exports: exported
     };
   } catch (error) {
