@@ -49,6 +49,12 @@ const schema = z.object({
   X_BEARER_TOKEN: z.string().default(''),
   PG_URL: z.string().default(''),
   X_ISSUE_HUNTER_WORKDIR: z.string().default('./runtime/x-issue-hunter'),
+  TIKTOK_RAPIDAPI_KEY: z.string().default(''),
+  TIKTOK_RAPIDAPI_HOST: z.string().default('tiktok-api23.p.rapidapi.com'),
+  TIKTOK_RAPIDAPI_BASE_URL: z.string().default('https://tiktok-api23.p.rapidapi.com'),
+  TIKTOK_RAPIDAPI_SEARCH_PATH: z.string().default('/api/search/video'),
+  TIKTOK_RAPIDAPI_MAX_COUNT: z.coerce.number().int().positive().default(20),
+  TIKTOK_ISSUE_HUNTER_WORKDIR: z.string().default('./runtime/tiktok-issue-hunter'),
   WHATSAPP_SEND_QR_TO_TERMINAL: z
     .string()
     .default('true')
@@ -71,6 +77,7 @@ env.INSTALOADER_WORKDIR = resolveFromCwd(env.INSTALOADER_WORKDIR);
 env.THEHARVESTER_WORKDIR = resolveFromCwd(env.THEHARVESTER_WORKDIR);
 env.MINI_MALTEGO_WORKDIR = resolveFromCwd(env.MINI_MALTEGO_WORKDIR);
 env.X_ISSUE_HUNTER_WORKDIR = resolveFromCwd(env.X_ISSUE_HUNTER_WORKDIR);
+env.TIKTOK_ISSUE_HUNTER_WORKDIR = resolveFromCwd(env.TIKTOK_ISSUE_HUNTER_WORKDIR);
 env.GOOGLE_DORK_DOC_TYPES = parseNormalizedCsv(env.GOOGLE_DORK_DOC_TYPES);
 if (env.GOOGLE_DORK_DOC_TYPES.length === 0) {
   env.GOOGLE_DORK_DOC_TYPES = parseNormalizedCsv('pdf,doc,docx,xls,xlsx,ppt,pptx');
