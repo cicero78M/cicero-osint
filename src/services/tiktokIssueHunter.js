@@ -28,6 +28,11 @@ const JATIM_REGION_TERMS = [
   'sampang'
 ];
 
+function logProcess(stage, detail = {}) {
+  // eslint-disable-next-line no-console
+  console.info('[TikTokIssueHunter]', JSON.stringify({ stage, ...detail }));
+}
+
 function parseCsv(input) {
   if (!input || input === '-') return [];
   return [...new Set(String(input).split(',').map((item) => item.trim()).filter(Boolean))];
@@ -152,6 +157,7 @@ class TikTokIssueHunter {
       }
 
       const backoffMs = (2 ** retry) * 1000;
+      logProcess('rapidapi_retry_429', { url, retry, backoffMs });
       await new Promise((resolve) => setTimeout(resolve, backoffMs));
       retry += 1;
     }
@@ -161,6 +167,8 @@ class TikTokIssueHunter {
     const safeWindow = clamp(windowMinutes, 15, 1440, 60);
     const regionRegex = new RegExp(`\\b(${JATIM_REGION_TERMS.join('|')})\\b`, 'i');
     let inserted = 0;
+
+    logProcess('ingestion_started', { keywordsCount: keywords.length, windowMinutes: safeWindow });
 
     for (const keyword of keywords) {
       const searchParams = new URLSearchParams({
@@ -173,6 +181,8 @@ class TikTokIssueHunter {
       const payload = await this.requestWithRetry(url);
       const items = parseRapidItems(payload).map(extractPost).filter(Boolean);
       const filtered = items.filter((item) => regionRegex.test(normalizeText(item.text)));
+
+      logProcess('ingestion_keyword_fetched', { keyword, fetchedItems: items.length, matchedRegion: filtered.length });
 
       for (const post of filtered) {
         // eslint-disable-next-line no-await-in-loop
@@ -215,11 +225,13 @@ class TikTokIssueHunter {
       }
     }
 
+    logProcess('ingestion_completed', { inserted, windowMinutes: safeWindow });
     return { inserted, windowMinutes: safeWindow };
   }
 
   async discoverIssues(windowMinutes = 60) {
     const safeWindow = clamp(windowMinutes, 15, 1440, 60);
+    logProcess('issue_discovery_started', { windowMinutes: safeWindow });
     const postsResult = await this.pool.query(
       `select post_id, author_id, created_at, text
        from tiktok_post
@@ -230,6 +242,7 @@ class TikTokIssueHunter {
 
     const posts = postsResult.rows.map((post) => ({ ...post, tokens: tokenize(post.text) })).filter((post) => post.tokens.length > 0);
     const clusters = bucketBySimilarity(posts, 0.34).filter((cluster) => cluster.posts.length >= 3);
+    logProcess('issue_discovery_source_loaded', { posts: posts.length, candidateClusters: clusters.length });
     const issues = [];
 
     for (const cluster of clusters) {
@@ -269,11 +282,13 @@ class TikTokIssueHunter {
       issues.push({ issueId, label, size: currentVolume, burstScore, representativePostId: repPost.post_id });
     }
 
+    logProcess('issue_discovery_completed', { issues: issues.length, windowMinutes: safeWindow });
     return issues;
   }
 
   async buildActorNetwork(windowMinutes = 60) {
     const safeWindow = clamp(windowMinutes, 15, 1440, 60);
+    logProcess('actor_network_started', { windowMinutes: safeWindow });
     const result = await this.pool.query(
       `with issue_posts as (
          select im.issue_id, p.post_id, p.author_id
@@ -293,11 +308,13 @@ class TikTokIssueHunter {
       [safeWindow]
     );
 
+    logProcess('actor_network_completed', { edges: result.rows.length, windowMinutes: safeWindow });
     return result.rows;
   }
 
   async exportGraphArtifacts(caseId) {
     const outDir = path.join(env.TIKTOK_ISSUE_HUNTER_WORKDIR, caseId);
+    logProcess('graph_export_started', { caseId, outDir });
     await fs.mkdir(outDir, { recursive: true });
 
     const issuesResult = await this.pool.query(`select * from tiktok_issue order by created_at desc limit 50`);
@@ -329,6 +346,7 @@ class TikTokIssueHunter {
     await fs.writeFile(nodesCsv, [':ID,:LABEL,name,burst_score', ...uniqNodes.map((node) => `${node.id},${node.label},${node.name || ''},${node.burst_score || ''}`)].join('\n'));
     await fs.writeFile(edgesCsv, [':START_ID,:END_ID,:TYPE', ...edges.map((edge) => `${edge.start},${edge.end},${edge.type}`)].join('\n'));
 
+    logProcess('graph_export_completed', { caseId, issues: issuesResult.rows.length, nodes: uniqNodes.length, edges: edges.length });
     return { outDir, issueJson, nodesCsv, edgesCsv };
   }
 
@@ -346,13 +364,18 @@ async function runTikTokIssueHunter({ keywords, windowMinutes }) {
     throw new Error('TIKTOK_RAPIDAPI_KEY belum diatur.');
   }
 
+  const safeWindow = clamp(windowMinutes, 15, 1440, 60);
+  logProcess('pipeline_started', { keywords: parsedKeywords, windowMinutes: safeWindow });
+
   const engine = new TikTokIssueHunter();
   try {
-    const ingestion = await engine.ingestRecent(parsedKeywords, windowMinutes);
-    const issues = await engine.discoverIssues(windowMinutes);
-    const actorNetwork = await engine.buildActorNetwork(windowMinutes);
+    const ingestion = await engine.ingestRecent(parsedKeywords, safeWindow);
+    const issues = await engine.discoverIssues(safeWindow);
+    const actorNetwork = await engine.buildActorNetwork(safeWindow);
     const caseId = `ttissue-${Date.now()}`;
     const exported = await engine.exportGraphArtifacts(caseId);
+
+    logProcess('pipeline_completed', { caseId, inserted: ingestion.inserted, issues: issues.length, actorNetworkEdges: actorNetwork.length });
 
     return {
       caseId,
@@ -361,6 +384,12 @@ async function runTikTokIssueHunter({ keywords, windowMinutes }) {
       actorNetwork,
       exports: exported
     };
+  } catch (error) {
+    logProcess('pipeline_failed', {
+      message: error?.message || String(error),
+      stack: error?.stack || null
+    });
+    throw error;
   } finally {
     await engine.close();
   }

@@ -378,7 +378,21 @@ async function handleCommand(text) {
     }
 
     try {
+      // eslint-disable-next-line no-console
+      console.info('TikTok issue hunter command started:', {
+        keywords,
+        windowMinutesInput: windowMinutesInput || 60
+      });
+
       const result = await runTikTokIssueHunter({ keywords, windowMinutes: windowMinutesInput || 60 });
+
+      // eslint-disable-next-line no-console
+      console.info('TikTok issue hunter command completed:', {
+        caseId: result.caseId,
+        issues: result.issues.length,
+        inserted: result.ingestion.inserted,
+        actorNetworkEdges: result.actorNetwork.length
+      });
       const issueLines = result.issues.slice(0, 5).map((issue, idx) => `${idx + 1}. ${issue.label} | burst=${issue.burstScore} | size=${issue.size}`);
 
       return [
