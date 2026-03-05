@@ -6,6 +6,7 @@ const { runTheHarvester } = require('../services/theharvester');
 const { runGoogleDork, DOCUMENT_TYPES } = require('../services/googleDork');
 const { runMiniMaltego } = require('../services/miniMaltego');
 const { runSocialMediaIntel } = require('../services/socialMediaIntel');
+const { runTwitterIssueHunter } = require('../services/twitterIssueHunter');
 const { env } = require('../config/env');
 
 function getHelpMessage() {
@@ -25,6 +26,7 @@ function getHelpMessage() {
     `${env.BOT_PREFIX}exif (reply gambar)`,
     `${env.BOT_PREFIX}minim <domain|-> <email_csv|-> <username_csv|-> (alias: miniosint, maltego)`,
     `${env.BOT_PREFIX}socmint <handle_csv|-> <email_csv|-> <link_csv|-> <keyword_csv|-> <hashtag_csv|->`,
+    `${env.BOT_PREFIX}xissue <keyword_csv> <window_menit(15-1440)|60>`,
     `${env.BOT_PREFIX}help`,
     '',
     `Tipe dokumen preset: ${DOCUMENT_TYPES.join(', ')}`,
@@ -355,6 +357,59 @@ async function handleCommand(text) {
         `Status: *${error?.message || 'Proses selesai dengan kegagalan'}*`,
         '',
         'Cek format input dan ulangi command.'
+      ].join('\n');
+    }
+  }
+
+
+  if (command === 'xissue' || command === 'twitterissue' || command === 'xhunter') {
+    const [keywords, windowMinutesInput, ...extra] = rest;
+    if (!keywords || extra.length > 0) {
+      return [
+        '❌ *Informasi Proses Twitter/X Issue Hunter*',
+        'Status: *Format argumen tidak valid*',
+        '',
+        `Gunakan format: ${env.BOT_PREFIX}xissue <keyword_csv> <window_menit(15-1440)|60>`,
+        `Contoh: ${env.BOT_PREFIX}xissue bansos,pilkada,macet 60`
+      ].join('\n');
+    }
+
+    try {
+      const result = await runTwitterIssueHunter({ keywords, windowMinutes: windowMinutesInput || 60 });
+      const issueLines = result.issues.slice(0, 5).map((issue, idx) => `${idx + 1}. ${issue.label} | burst=${issue.burstScore} | size=${issue.size}`);
+
+      return [
+        '✅ *Twitter/X Issue Hunter selesai*',
+        `Case ID: *${result.caseId}*`,
+        `Ingestion (window ${result.ingestion.windowMinutes}m): ${result.ingestion.inserted} post tersimpan`,
+        `Issue terdeteksi: ${result.issues.length}`,
+        `Actor network edges: ${result.actorNetwork.length}`,
+        '',
+        '*Top issue cluster:*',
+        ...(issueLines.length ? issueLines : ['- Belum ada cluster issue yang memenuhi threshold minimum.']),
+        '',
+        '*Export artifacts:*',
+        `- issues.json: ${result.exports.issueJson}`,
+        `- nodes.csv: ${result.exports.nodesCsv}`,
+        `- edges.csv: ${result.exports.edgesCsv}`,
+        '',
+        '_Catatan: pipeline dibatasi untuk isu wilayah Jawa Timur (Jatim) via query rule regional._'
+      ].join('\n');
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Twitter issue hunter command failed:', {
+        keywords,
+        windowMinutesInput,
+        error: error?.stack || error?.message || String(error)
+      });
+
+      return [
+        '❌ *Informasi Proses Twitter/X Issue Hunter*',
+        `Keywords: *${keywords || '-'}*`,
+        `Window: *${windowMinutesInput || 60}* menit`,
+        `Status: *${error?.message || 'Proses selesai dengan kegagalan'}*`,
+        '',
+        'Pastikan X_BEARER_TOKEN, PG_URL, dan schema database x_issue_hunter sudah terpasang.'
       ].join('\n');
     }
   }

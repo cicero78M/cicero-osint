@@ -45,6 +45,10 @@ const schema = z.object({
   MINI_MALTEGO_SOCIAL_SITES: z.string().default('[{"name":"GitHub","url_template":"https://github.com/{username}"},{"name":"Instagram","url_template":"https://www.instagram.com/{username}/"},{"name":"TikTok","url_template":"https://www.tiktok.com/@{username}"},{"name":"X","url_template":"https://x.com/{username}"},{"name":"YouTube","url_template":"https://www.youtube.com/@{username}"}]'),
   GOOGLE_DORK_DEFAULT_SITE: z.string().default(''),
   GOOGLE_DORK_MAX_RESULTS: z.coerce.number().int().positive().default(20),
+
+  X_BEARER_TOKEN: z.string().default(''),
+  PG_URL: z.string().default(''),
+  X_ISSUE_HUNTER_WORKDIR: z.string().default('./runtime/x-issue-hunter'),
   WHATSAPP_SEND_QR_TO_TERMINAL: z
     .string()
     .default('true')
@@ -66,6 +70,7 @@ env.MAIGRET_WORKDIR = resolveFromCwd(env.MAIGRET_WORKDIR);
 env.INSTALOADER_WORKDIR = resolveFromCwd(env.INSTALOADER_WORKDIR);
 env.THEHARVESTER_WORKDIR = resolveFromCwd(env.THEHARVESTER_WORKDIR);
 env.MINI_MALTEGO_WORKDIR = resolveFromCwd(env.MINI_MALTEGO_WORKDIR);
+env.X_ISSUE_HUNTER_WORKDIR = resolveFromCwd(env.X_ISSUE_HUNTER_WORKDIR);
 env.GOOGLE_DORK_DOC_TYPES = parseNormalizedCsv(env.GOOGLE_DORK_DOC_TYPES);
 if (env.GOOGLE_DORK_DOC_TYPES.length === 0) {
   env.GOOGLE_DORK_DOC_TYPES = parseNormalizedCsv('pdf,doc,docx,xls,xlsx,ppt,pptx');
