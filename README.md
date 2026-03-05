@@ -58,6 +58,7 @@ npm start
 - `!minim <domain|-> <email_csv|-> <username_csv|->` (mini-Maltego OSINT + export JSON/Neo4j CSV)
 - `!ping`
 - `!socmint <handle_csv|-> <email_csv|-> <link_csv|-> <keyword_csv|-> <hashtag_csv|->` (social media information gathering: identity + sockpuppet + issue mapping)
+- `!issuehunter` (alias: `!isuhunter`, `!smissue`) menampilkan playbook **TikTok Issue Hunter** (emerging issue, clustering, network mapping, burst detection)
 - `!sherlock <username>`
 - `!holehe <email>`
 - `!maigret <username>`
@@ -251,3 +252,27 @@ Skema output utama:
 - `entities_issue_cluster`
 - `edges` (`LIKELY_SAME_OPERATOR`, `POSTS_ABOUT`, dll)
 - `evidence_store` (tool, raw_path, timestamp, extracted_json)
+
+
+### TikTok Issue Hunter menu
+
+Gunakan command berikut untuk menampilkan blueprint operasional **Issue Hunter khusus platform TikTok**:
+
+```text
+!issuehunter
+!isuhunter
+!smissue
+```
+
+Cakupan workflow yang ditampilkan:
+
+- arsitektur pipeline end-to-end (collector → processing → embedding → clustering → labeling → network → trend),
+- dataset minimal TikTok (video/caption/hashtag/audio/engagement/mention),
+- feature extraction `embedding(caption) + hashtag + entity + audio`,
+- metode clustering `HDBSCAN + embedding` (opsional UMAP),
+- auto-label isu per cluster (top keyword/hashtag/entity),
+- burst detection `volume_now / average_volume_last_7_days` dengan trigger `> 3`,
+- network mapping akun/hashtag/audio + community detection (Louvain/Leiden),
+- indikator amplifikasi/koordinasi akun,
+- format output dashboard issue harian,
+- skema data operasional dan opsi upgrade (Narrative Detection, Actor Influence Score, Early Warning).
