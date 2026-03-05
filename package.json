@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "NODE_ENV=development node src/index.js",
-    "check": "node --check src/index.js && node --check src/config/env.js && node --check src/services/sherlock.js && node --check src/services/holehe.js && node --check src/services/maigret.js && node --check src/services/instaloader.js && node --check src/services/theharvester.js && node --check src/services/googleDork.js && node --check src/services/exif.js && node --check src/whatsapp/client.js && node --check src/commands/registry.js && node --check src/services/miniMaltego.js && node --check src/services/socialMediaIntel.js"
+    "check": "node --check src/index.js && node --check src/config/env.js && node --check src/services/sherlock.js && node --check src/services/holehe.js && node --check src/services/maigret.js && node --check src/services/instaloader.js && node --check src/services/theharvester.js && node --check src/services/googleDork.js && node --check src/services/exif.js && node --check src/whatsapp/client.js && node --check src/commands/registry.js && node --check src/services/miniMaltego.js && node --check src/services/socialMediaIntel.js && node --check src/services/twitterIssueHunter.js"
   },
   "engines": {
     "node": ">=18"
@@ -16,8 +16,10 @@
     "@whiskeysockets/baileys": "^6.7.18",
     "dotenv": "^16.4.5",
     "link-preview-js": "^3.2.0",
+    "pg": "^8.20.0",
     "pino": "^9.3.2",
     "qrcode-terminal": "^0.12.0",
+    "twitter-api-v2": "^1.29.0",
     "xlsx": "^0.18.5",
     "zod": "^3.23.8"
   }

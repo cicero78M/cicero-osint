@@ -58,6 +58,7 @@ npm start
 - `!minim <domain|-> <email_csv|-> <username_csv|->` (mini-Maltego OSINT + export JSON/Neo4j CSV)
 - `!ping`
 - `!socmint <handle_csv|-> <email_csv|-> <link_csv|-> <keyword_csv|-> <hashtag_csv|->` (social media information gathering: identity + sockpuppet + issue mapping)
+- `!xissue <keyword_csv> <window_menit(15-1440)|60>` (Twitter/X Issue Hunter Jatim: clustering issue + burst + network export)
 - `!sherlock <username>`
 - `!holehe <email>`
 - `!maigret <username>`
@@ -218,6 +219,29 @@ MINI_MALTEGO_MAX_OUTPUT_CHARS=3500
 MINI_MALTEGO_USER_AGENT=mini-maltego-osint/1.0
 MINI_MALTEGO_SOCIAL_SITES=[{"name":"GitHub","url_template":"https://github.com/{username}"},{"name":"Instagram","url_template":"https://www.instagram.com/{username}/"},{"name":"TikTok","url_template":"https://www.tiktok.com/@{username}"},{"name":"X","url_template":"https://x.com/{username}"},{"name":"YouTube","url_template":"https://www.youtube.com/@{username}"}]
 ```
+
+```env
+X_BEARER_TOKEN=
+PG_URL=postgres://user:pass@host:5432/db
+X_ISSUE_HUNTER_WORKDIR=./runtime/x-issue-hunter
+```
+
+### Twitter/X Issue Hunter (Jatim)
+
+Perintah:
+
+```text
+!xissue bansos,pilkada,jalanrusak 60
+```
+
+Pipeline memakai X API v2 resmi (filtered stream/recent search), tanpa scraping, dan mengekspor artefak graph:
+
+- `issues.json`
+- `nodes.csv`
+- `edges.csv`
+
+Skema PostgreSQL tersedia di `sql/x_issue_hunter_schema.sql`.
+Dokumentasi implementasi ada di `docs/twitter-issue-hunter.md`.
 
 
 ### Social Media Information Gathering menu
