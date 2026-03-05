@@ -7,6 +7,7 @@ const { runGoogleDork, DOCUMENT_TYPES } = require('../services/googleDork');
 const { runMiniMaltego } = require('../services/miniMaltego');
 const { runSocialMediaIntel } = require('../services/socialMediaIntel');
 const { runTwitterIssueHunter } = require('../services/twitterIssueHunter');
+const { runTikTokIssueHunter } = require('../services/tiktokIssueHunter');
 const { env } = require('../config/env');
 
 function getHelpMessage() {
@@ -27,6 +28,7 @@ function getHelpMessage() {
     `${env.BOT_PREFIX}minim <domain|-> <email_csv|-> <username_csv|-> (alias: miniosint, maltego)`,
     `${env.BOT_PREFIX}socmint <handle_csv|-> <email_csv|-> <link_csv|-> <keyword_csv|-> <hashtag_csv|->`,
     `${env.BOT_PREFIX}xissue <keyword_csv> <window_menit(15-1440)|60>`,
+    `${env.BOT_PREFIX}ttissue <keyword_csv> <window_menit(15-1440)|60>`,
     `${env.BOT_PREFIX}help`,
     '',
     `Tipe dokumen preset: ${DOCUMENT_TYPES.join(', ')}`,
@@ -357,6 +359,60 @@ async function handleCommand(text) {
         `Status: *${error?.message || 'Proses selesai dengan kegagalan'}*`,
         '',
         'Cek format input dan ulangi command.'
+      ].join('\n');
+    }
+  }
+
+
+
+  if (command === 'ttissue' || command === 'tiktokissue' || command === 'tthunter') {
+    const [keywords, windowMinutesInput, ...extra] = rest;
+    if (!keywords || extra.length > 0) {
+      return [
+        '❌ *Informasi Proses TikTok Issue Hunter*',
+        'Status: *Format argumen tidak valid*',
+        '',
+        `Gunakan format: ${env.BOT_PREFIX}ttissue <keyword_csv> <window_menit(15-1440)|60>`,
+        `Contoh: ${env.BOT_PREFIX}ttissue bansos,pilkada,macet 60`
+      ].join('\n');
+    }
+
+    try {
+      const result = await runTikTokIssueHunter({ keywords, windowMinutes: windowMinutesInput || 60 });
+      const issueLines = result.issues.slice(0, 5).map((issue, idx) => `${idx + 1}. ${issue.label} | burst=${issue.burstScore} | size=${issue.size}`);
+
+      return [
+        '✅ *TikTok Issue Hunter selesai*',
+        `Case ID: *${result.caseId}*`,
+        `Ingestion (window ${result.ingestion.windowMinutes}m): ${result.ingestion.inserted} post tersimpan`,
+        `Issue terdeteksi: ${result.issues.length}`,
+        `Actor network edges: ${result.actorNetwork.length}`,
+        '',
+        '*Top issue cluster:*',
+        ...(issueLines.length ? issueLines : ['- Belum ada cluster issue yang memenuhi threshold minimum.']),
+        '',
+        '*Export artifacts:*',
+        `- issues.json: ${result.exports.issueJson}`,
+        `- nodes.csv: ${result.exports.nodesCsv}`,
+        `- edges.csv: ${result.exports.edgesCsv}`,
+        '',
+        '_Catatan: sumber data berasal dari RapidAPI tiktok-api23 dan dibatasi untuk isu wilayah Jawa Timur (Jatim)._'
+      ].join('\n');
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('TikTok issue hunter command failed:', {
+        keywords,
+        windowMinutesInput,
+        error: error?.stack || error?.message || String(error)
+      });
+
+      return [
+        '❌ *Informasi Proses TikTok Issue Hunter*',
+        `Keywords: *${keywords || '-'}*`,
+        `Window: *${windowMinutesInput || 60}* menit`,
+        `Status: *${error?.message || 'Proses selesai dengan kegagalan'}*`,
+        '',
+        'Pastikan TIKTOK_RAPIDAPI_KEY, PG_URL, dan schema database tiktok_issue_hunter sudah terpasang.'
       ].join('\n');
     }
   }

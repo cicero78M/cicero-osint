@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "NODE_ENV=development node src/index.js",
-    "check": "node --check src/index.js && node --check src/config/env.js && node --check src/services/sherlock.js && node --check src/services/holehe.js && node --check src/services/maigret.js && node --check src/services/instaloader.js && node --check src/services/theharvester.js && node --check src/services/googleDork.js && node --check src/services/exif.js && node --check src/whatsapp/client.js && node --check src/commands/registry.js && node --check src/services/miniMaltego.js && node --check src/services/socialMediaIntel.js && node --check src/services/twitterIssueHunter.js"
+    "check": "node --check src/index.js && node --check src/config/env.js && node --check src/services/sherlock.js && node --check src/services/holehe.js && node --check src/services/maigret.js && node --check src/services/instaloader.js && node --check src/services/theharvester.js && node --check src/services/googleDork.js && node --check src/services/exif.js && node --check src/whatsapp/client.js && node --check src/commands/registry.js && node --check src/services/miniMaltego.js && node --check src/services/socialMediaIntel.js && node --check src/services/twitterIssueHunter.js && node --check src/services/tiktokIssueHunter.js"
   },
   "engines": {
     "node": ">=18"
