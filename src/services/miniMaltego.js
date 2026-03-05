@@ -296,6 +296,86 @@ async function exportArtifacts(graph, outDir) {
   return { jsonPath, nodesPath, edgesPath };
 }
 
+
+function toList(values, fallback = '-') {
+  const items = [...new Set((values || []).filter(Boolean))];
+  return items.length ? items.join(', ') : fallback;
+}
+
+async function buildStructuredSummaryFromGraphJson(jsonPath, maxChars) {
+  let payload;
+  try {
+    payload = JSON.parse(await fs.readFile(jsonPath, 'utf-8'));
+  } catch {
+    return 'Ringkasan tidak tersedia: gagal membaca graph.json.';
+  }
+
+  const nodes = Array.isArray(payload?.nodes) ? payload.nodes : [];
+  const edges = Array.isArray(payload?.edges) ? payload.edges : [];
+
+  const byType = nodes.reduce((acc, node) => {
+    const type = String(node?.type || 'Unknown');
+    acc[type] = (acc[type] || 0) + 1;
+    return acc;
+  }, {});
+
+  const domains = nodes.filter((n) => n.type === 'Domain').map((n) => n.domain || n.key);
+  const emails = nodes.filter((n) => n.type === 'Email').map((n) => n.email || n.key);
+  const ips = nodes.filter((n) => n.type === 'IP').map((n) => n.ip || n.key);
+  const handles = nodes.filter((n) => n.type === 'Handle').map((n) => n.handle || n.key);
+  const socialAccounts = nodes.filter((n) => n.type === 'SocialAccount');
+  const activeAccounts = socialAccounts.filter((n) => n.exists === true);
+  const dnsRecords = nodes.filter((n) => n.type === 'DNSRecord').map((n) => `${n.rtype || '?'}:${n.value || n.key}`);
+  const webPages = nodes.filter((n) => n.type === 'WebPage').map((n) => n.url || n.key);
+  const gravatars = nodes.filter((n) => n.type === 'Gravatar');
+  const gravatarExists = gravatars.filter((n) => n.exists === true).length;
+  const sockpuppetEdges = edges.filter((e) => e.type === 'POSSIBLE_SOCKPUPPET');
+
+  const scoreLines = sockpuppetEdges
+    .map((e) => `- ${String(e.src || '').replace('Handle:', '')} ↔ ${String(e.dst || '').replace('Handle:', '')} (score=${e.score ?? '-'})`)
+    .slice(0, 5);
+
+  const typeSummary = Object.entries(byType)
+    .sort((a, b) => b[1] - a[1])
+    .map(([type, count]) => `${type}:${count}`)
+    .join(', ') || '-';
+
+  const lines = [
+    '📌 *Laporan Mini-Maltego OSINT*',
+    `Case ID: *${payload?.case_id || '-'}*`,
+    '',
+    '*Statistik Graph*',
+    `- Total node: ${nodes.length}`,
+    `- Total edge: ${edges.length}`,
+    `- Komposisi node: ${typeSummary}`,
+    '',
+    '*Hasil Domain & Infrastruktur*',
+    `- Domain terdeteksi: ${toList(domains)}`,
+    `- IP resolve: ${toList(ips)}`,
+    `- DNS record: ${dnsRecords.length ? dnsRecords.slice(0, 8).join('; ') : '-'}`,
+    '',
+    '*Hasil Identitas*',
+    `- Email terdeteksi: ${toList(emails)}`,
+    `- Handle/username: ${toList(handles)}`,
+    `- Gravatar aktif: ${gravatarExists}/${gravatars.length}`,
+    '',
+    '*Hasil Social Presence*',
+    `- Akun social dipindai: ${socialAccounts.length}`,
+    `- Akun terindikasi aktif (exists=true): ${activeAccounts.length}`,
+    '',
+    '*Hasil Web Mapping*',
+    `- Web page terpetakan: ${webPages.length}`,
+    `- Sampel URL: ${webPages.length ? webPages.slice(0, 5).join(' | ') : '-'}`,
+    '',
+    '*Indikasi Sockpuppet (heuristik, bukan bukti)*',
+    ...(scoreLines.length ? scoreLines : ['- Tidak ada pasangan melewati threshold kemiripan.'])
+  ];
+
+  const output = lines.join('\n').trim();
+  if (!maxChars || output.length <= maxChars) return output;
+  return `${output.slice(0, maxChars - 25)}\n\n[ringkasan dipotong]`;
+}
+
 function csvEscape(value) {
   const raw = String(value ?? '');
   if (!/[",\n]/.test(raw)) return raw;
@@ -347,7 +427,7 @@ async function runMiniMaltego({ domain, emails, handles }) {
   const caseDir = path.join(env.MINI_MALTEGO_WORKDIR, `${caseId}`);
   logStage('export.start', { caseId, outDir: caseDir });
   const artifacts = await exportArtifacts(graph, caseDir);
-  const summary = `Nodes=${graph.nodes().length}, Edges=${graph.edges.length}, Domain=${normalizedDomain || '-'}, Emails=${normalizedEmails.length}, Usernames=${normalizedHandles.length}`;
+  const summary = await buildStructuredSummaryFromGraphJson(artifacts.jsonPath, env.MINI_MALTEGO_MAX_OUTPUT_CHARS);
 
   logStage('case.done', {
     caseId,

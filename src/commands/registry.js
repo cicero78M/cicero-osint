@@ -263,7 +263,7 @@ async function handleCommand(text) {
 
     try {
       const result = await runMiniMaltego({ domain, emails, handles });
-      return [
+      const text = [
         '✅ *Mini-Maltego OSINT selesai*',
         `Case ID: *${result.caseId}*`,
         `Output folder: ${result.outDir}`,
@@ -276,6 +276,24 @@ async function handleCommand(text) {
         result.output || 'Tidak ada ringkasan.',
         '```'
       ].join('\n');
+
+      return {
+        text,
+        attachments: [
+          {
+            type: 'document',
+            path: result.nodesPath,
+            fileName: `${result.caseId}-neo4j_nodes.csv`,
+            mimetype: 'text/csv'
+          },
+          {
+            type: 'document',
+            path: result.edgesPath,
+            fileName: `${result.caseId}-neo4j_edges.csv`,
+            mimetype: 'text/csv'
+          }
+        ]
+      };
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Mini-Maltego command failed:', {
