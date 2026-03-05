@@ -40,6 +40,7 @@ async function bootstrap() {
   await fs.mkdir(env.MAIGRET_WORKDIR, { recursive: true });
   await fs.mkdir(env.INSTALOADER_WORKDIR, { recursive: true });
   await fs.mkdir(env.THEHARVESTER_WORKDIR, { recursive: true });
+  await fs.mkdir(env.MINI_MALTEGO_WORKDIR, { recursive: true });
 
   const requiredChecks = [
     { command: env.SHERLOCK_CMD, name: 'sherlock', checks: [['--version'], ['--help']] },

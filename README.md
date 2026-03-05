@@ -55,6 +55,7 @@ npm start
 ## 5) Daftar perintah WA
 
 - `!help`
+- `!minim <domain|-> <email_csv|-> <username_csv|->` (mini-Maltego OSINT + export JSON/Neo4j CSV)
 - `!ping`
 - `!sherlock <username>`
 - `!holehe <email>`
@@ -188,3 +189,30 @@ Jika PM2 log menunjukkan error dekripsi/session seperti `PreKeyError` atau `Inva
    ```
 
    - Scan QR ulang pada WhatsApp Linked Devices.
+
+
+### Mini-Maltego OSINT menu
+
+Perintah baru untuk scan gabungan domain + email + social dengan heuristik sockpuppet ringan:
+
+```text
+!minim example.com admin@example.com,security@example.com cicero_admin,cicero.ops
+!minim example.com - john,doe
+!minim - admin@example.com -
+```
+
+Output otomatis disimpan di `runtime/mini-maltego/<case-id>/` dengan artefak:
+
+- `graph.json`
+- `neo4j_nodes.csv`
+- `neo4j_edges.csv`
+
+Environment variable opsional:
+
+```env
+MINI_MALTEGO_WORKDIR=./runtime/mini-maltego
+MINI_MALTEGO_TIMEOUT_MS=15000
+MINI_MALTEGO_MAX_OUTPUT_CHARS=3500
+MINI_MALTEGO_USER_AGENT=mini-maltego-osint/1.0
+MINI_MALTEGO_SOCIAL_SITES=[{"name":"GitHub","url_template":"https://github.com/{username}"},{"name":"Instagram","url_template":"https://www.instagram.com/{username}/"},{"name":"TikTok","url_template":"https://www.tiktok.com/@{username}"},{"name":"X","url_template":"https://x.com/{username}"},{"name":"YouTube","url_template":"https://www.youtube.com/@{username}"}]
+```
