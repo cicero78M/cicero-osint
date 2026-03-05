@@ -325,6 +325,7 @@ async function buildStructuredSummaryFromGraphJson(jsonPath, maxChars) {
   const handles = nodes.filter((n) => n.type === 'Handle').map((n) => n.handle || n.key);
   const socialAccounts = nodes.filter((n) => n.type === 'SocialAccount');
   const activeAccounts = socialAccounts.filter((n) => n.exists === true);
+  const activeAccountLinks = activeAccounts.map((n) => n.url || n.key).filter(Boolean);
   const dnsRecords = nodes.filter((n) => n.type === 'DNSRecord').map((n) => `${n.rtype || '?'}:${n.value || n.key}`);
   const webPages = nodes.filter((n) => n.type === 'WebPage').map((n) => n.url || n.key);
   const gravatars = nodes.filter((n) => n.type === 'Gravatar');
@@ -362,10 +363,11 @@ async function buildStructuredSummaryFromGraphJson(jsonPath, maxChars) {
     '*Hasil Social Presence*',
     `- Akun social dipindai: ${socialAccounts.length}`,
     `- Akun terindikasi aktif (exists=true): ${activeAccounts.length}`,
+    `- Link aktif: ${activeAccountLinks.length ? activeAccountLinks.join(' | ') : '-'}`,
     '',
     '*Hasil Web Mapping*',
     `- Web page terpetakan: ${webPages.length}`,
-    `- Sampel URL: ${webPages.length ? webPages.slice(0, 5).join(' | ') : '-'}`,
+    `- Semua URL: ${webPages.length ? webPages.join(' | ') : '-'}`,
     '',
     '*Indikasi Sockpuppet (heuristik, bukan bukti)*',
     ...(scoreLines.length ? scoreLines : ['- Tidak ada pasangan melewati threshold kemiripan.'])
