@@ -279,23 +279,42 @@ async function runSocialMediaIntel({ handles, emails, links, keywords, hashtags 
 
   const professionalAnalysis = buildProfessionalAnalysis(outputData);
 
+  const positiveSignals = [
+    outputData.runtime.stage_1_2.discovered_accounts > 0
+      ? `Akun discovered/validated: ${outputData.runtime.stage_1_2.discovered_accounts}`
+      : null,
+    outputData.runtime.stage_3.correlated_pairs > 0
+      ? `Relasi LIKELY_SAME_OPERATOR: ${outputData.runtime.stage_3.correlated_pairs}`
+      : null,
+    outputData.runtime.stage_4.issue_clusters > 0
+      ? `Issue cluster terpetakan: ${outputData.runtime.stage_4.issue_clusters}`
+      : null,
+    outputData.runtime.stage_4.hashtags > 0
+      ? `Hashtag terpetakan: ${outputData.runtime.stage_4.hashtags}`
+      : null
+  ].filter(Boolean);
+
   const summary = [
     '✅ *SOCMINT Intelligence Report*',
     '',
-    `Case ID: *${caseId}*`,
-    `Generated: ${new Date().toISOString()}`,
+    '*Informasi Case*',
+    `- Case ID: ${caseId}`,
+    `- Waktu Generate: ${new Date().toISOString()}`,
+    '',
+    '*Ringkasan Input*',
+    `- Handles: ${normalizedHandles.join(', ') || '-'}`,
+    `- Emails: ${normalizedEmails.join(', ') || '-'}`,
+    `- Links: ${normalizedLinks.join(', ') || '-'}`,
+    `- Keywords: ${normalizedKeywords.join(', ') || '-'}`,
+    `- Hashtags: ${normalizedHashtags.map((tag) => `#${tag}`).join(', ') || '-'}`,
     '',
     '*Executive Summary*',
     professionalAnalysis.executiveSummary,
     '',
-    '*JSON Output (Ringkasan)*',
-    '```json',
-    JSON.stringify({
-      case_id: outputData.case_id,
-      runtime: outputData.runtime,
-      output_file: jsonPath
-    }, null, 2),
-    '```',
+    '*Nilai Positif yang Ditemukan*',
+    ...(positiveSignals.length
+      ? positiveSignals.map((line) => `+ ${line}`)
+      : ['+ Belum ada indikator positif signifikan dari seed saat ini.']),
     '',
     '*Analysis*',
     ...professionalAnalysis.keyFindings.map((line) => `- ${line}`),
@@ -309,7 +328,8 @@ async function runSocialMediaIntel({ handles, emails, links, keywords, hashtags 
     '- Stage 4: Issue Graph (issue cluster + hashtag mapping)',
     '- Stage 5: Export JSON evidence bundle',
     '',
-    `Output JSON evidence lengkap: ${jsonPath}`
+    '*Output File*',
+    `- JSON evidence lengkap: ${jsonPath}`
   ].join('\n');
 
   return { caseId, outDir, jsonPath, output: summary };
