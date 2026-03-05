@@ -125,6 +125,35 @@ function classifyScore(score) {
   return 'unconfirmed';
 }
 
+
+function buildProfessionalAnalysis(outputData) {
+  const discovered = outputData.runtime.stage_1_2.discovered_accounts;
+  const correlated = outputData.runtime.stage_3.correlated_pairs;
+  const issues = outputData.runtime.stage_4.issue_clusters;
+  const hashtags = outputData.runtime.stage_4.hashtags;
+
+  const totalPossiblePairs = discovered > 1 ? (discovered * (discovered - 1)) / 2 : 0;
+  const correlationRate = totalPossiblePairs > 0
+    ? `${((correlated / totalPossiblePairs) * 100).toFixed(1)}%`
+    : '0.0%';
+
+  return {
+    executiveSummary: discovered > 0
+      ? 'Pipeline discovery dan validasi akun berhasil dijalankan. Sistem menemukan kandidat akun lintas platform beserta indikasi korelasi awal sockpuppet.'
+      : 'Pipeline sudah berjalan, namun belum ada akun terverifikasi dari seed yang diberikan.',
+    keyFindings: [
+      `Total akun discovered/validated: ${discovered}`,
+      `Relasi LIKELY_SAME_OPERATOR (>=possible): ${correlated}`,
+      `Issue cluster terpetakan: ${issues}`,
+      `Hashtag terpetakan: ${hashtags}`,
+      `Kerapatan korelasi antar akun: ${correlationRate}`
+    ],
+    recommendation: discovered > 0
+      ? 'Prioritaskan verifikasi manual pada edge dengan confidence tertinggi dan reason code dominan, lalu lanjutkan ekspor graph ke Neo4j untuk analisis ring/diffusion lanjutan.'
+      : 'Perlu memperkaya seed (handle/email/link) agar coverage discovery meningkat sebelum korelasi dan issue mapping tahap lanjut.'
+  };
+}
+
 async function ensureWorkdir() {
   const workdir = path.join(env.MINI_MALTEGO_WORKDIR, 'social-media');
   await fs.mkdir(workdir, { recursive: true });
@@ -248,21 +277,39 @@ async function runSocialMediaIntel({ handles, emails, links, keywords, hashtags 
   const jsonPath = path.join(outDir, 'social-media-intel.json');
   await fs.writeFile(jsonPath, JSON.stringify(outputData, null, 2));
 
+  const professionalAnalysis = buildProfessionalAnalysis(outputData);
+
   const summary = [
-    '✅ *Social Media Information Gathering selesai*',
+    '✅ *SOCMINT Intelligence Report*',
+    '',
     `Case ID: *${caseId}*`,
-    `Seed handles: ${normalizedHandles.join(', ') || '-'}`,
-    `Akun ditemukan/tervalidasi: ${outputData.runtime.stage_1_2.discovered_accounts}`,
-    `Relasi sockpuppet (>=possible): ${outputData.runtime.stage_3.correlated_pairs}`,
-    `Issue cluster dipetakan: ${outputData.runtime.stage_4.issue_clusters}`,
-    `Hashtag dipetakan: ${outputData.runtime.stage_4.hashtags}`,
+    `Generated: ${new Date().toISOString()}`,
     '',
-    '*Blueprint yang diterapkan:*',
-    '- Jalur A: Identity & Account Discovery (Sherlock -> Maigret).',
-    '- Jalur B: Sockpuppet Correlation (reason codes + confidence score).',
-    '- Jalur C: Issue Mapping (keyword/hashtag seeded topic graph).',
+    '*Executive Summary*',
+    professionalAnalysis.executiveSummary,
     '',
-    `Output JSON evidence: ${jsonPath}`
+    '*JSON Output (Ringkasan)*',
+    '```json',
+    JSON.stringify({
+      case_id: outputData.case_id,
+      runtime: outputData.runtime,
+      output_file: jsonPath
+    }, null, 2),
+    '```',
+    '',
+    '*Analysis*',
+    ...professionalAnalysis.keyFindings.map((line) => `- ${line}`),
+    `- Recommendation: ${professionalAnalysis.recommendation}`,
+    '',
+    '*Workflow Blueprint*',
+    '- Stage 0: Seeds (handle/email/link/keyword/hashtag)',
+    '- Stage 1: Discover (Sherlock broad sweep)',
+    '- Stage 2: Validate & Extract (Maigret)',
+    '- Stage 3: Correlate (confidence + reason codes)',
+    '- Stage 4: Issue Graph (issue cluster + hashtag mapping)',
+    '- Stage 5: Export JSON evidence bundle',
+    '',
+    `Output JSON evidence lengkap: ${jsonPath}`
   ].join('\n');
 
   return { caseId, outDir, jsonPath, output: summary };

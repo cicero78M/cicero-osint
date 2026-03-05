@@ -333,17 +333,7 @@ async function handleCommand(text) {
 
     try {
       const result = await runSocialMediaIntel({ handles, emails, links, keywords, hashtags });
-      return [
-        result.output,
-        '',
-        '*Workflow Runtime:*',
-        '- Stage 0: Seeds (handle/email/link/keyword/hashtag)',
-        '- Stage 1: Discover (Sherlock broad sweep)',
-        '- Stage 2: Validate & Extract (Maigret)',
-        '- Stage 3: Correlate (confidence + reason codes)',
-        '- Stage 4: Issue Graph (issue cluster + hashtag mapping)',
-        '- Stage 5: Export JSON evidence bundle'
-      ].join('\n');
+      return result.output;
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Social media intel command failed:', {
