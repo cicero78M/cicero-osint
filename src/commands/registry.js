@@ -5,6 +5,7 @@ const { runInstaloader } = require('../services/instaloader');
 const { runTheHarvester } = require('../services/theharvester');
 const { runGoogleDork, DOCUMENT_TYPES } = require('../services/googleDork');
 const { runMiniMaltego } = require('../services/miniMaltego');
+const { runSocialMediaIntel } = require('../services/socialMediaIntel');
 const { env } = require('../config/env');
 
 function getHelpMessage() {
@@ -23,6 +24,7 @@ function getHelpMessage() {
     `${env.BOT_PREFIX}dorkdoc <keyword> <target|-> <domain|-> <tipe_dokumen>`,
     `${env.BOT_PREFIX}exif (reply gambar)`,
     `${env.BOT_PREFIX}minim <domain|-> <email_csv|-> <username_csv|-> (alias: miniosint, maltego)`,
+    `${env.BOT_PREFIX}socmint <handle_csv|-> <email_csv|-> <link_csv|-> <keyword_csv|-> <hashtag_csv|->`,
     `${env.BOT_PREFIX}help`,
     '',
     `Tipe dokumen preset: ${DOCUMENT_TYPES.join(', ')}`,
@@ -308,6 +310,48 @@ async function handleCommand(text) {
         `Domain: *${domain || '-'}*`,
         `Emails: *${emails || '-'}*`,
         `Usernames: *${handles || '-'}*`,
+        `Status: *${error?.message || 'Proses selesai dengan kegagalan'}*`,
+        '',
+        'Cek format input dan ulangi command.'
+      ].join('\n');
+    }
+  }
+
+
+
+  if (command === 'socmint' || command === 'socialmint' || command === 'socmed') {
+    const [handles, emails, links, keywords, hashtags, ...extra] = rest;
+    if (extra.length > 0) {
+      return [
+        '❌ *Informasi Proses Social Media Information Gathering*',
+        'Status: *Format argumen tidak valid*',
+        '',
+        `Gunakan format: ${env.BOT_PREFIX}socmint <handle_csv|-> <email_csv|-> <link_csv|-> <keyword_csv|-> <hashtag_csv|->`,
+        `Contoh: ${env.BOT_PREFIX}socmint john_doe,jane - linktr.ee/john pemilu,bansos #pemilu,#politik`
+      ].join('\n');
+    }
+
+    try {
+      const result = await runSocialMediaIntel({ handles, emails, links, keywords, hashtags });
+      return result.output;
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Social media intel command failed:', {
+        handles,
+        emails,
+        links,
+        keywords,
+        hashtags,
+        error: error?.stack || error?.message || String(error)
+      });
+
+      return [
+        '❌ *Informasi Proses Social Media Information Gathering*',
+        `Handles: *${handles || '-'}*`,
+        `Emails: *${emails || '-'}*`,
+        `Links: *${links || '-'}*`,
+        `Keywords: *${keywords || '-'}*`,
+        `Hashtags: *${hashtags || '-'}*`,
         `Status: *${error?.message || 'Proses selesai dengan kegagalan'}*`,
         '',
         'Cek format input dan ulangi command.'
