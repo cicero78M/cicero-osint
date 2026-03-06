@@ -61,7 +61,7 @@ npm start
 - `!xissue <keyword_csv> <window_menit(15-1440)|60>` (Twitter/X Issue Hunter Jatim: clustering issue + burst + network export)
 - `!ttmenu` (lihat submenu TikTok Issue Hunter)
 - `!ttissue <keyword_csv> <window_menit(15-1440)|60>` (default submenu `all`)
-- `!ttissue <submenu:all|crawl|issue|sockpuppet|graph> <keyword_csv> <window_menit(15-1440)|60>`
+- `!ttissue <submenu:all|crawl|issue|sockpuppet|graph|narrative|rtnt> <keyword_csv> <window_menit(15-1440)|60>`
 - `!sherlock <username>`
 - `!holehe <email>`
 - `!maigret <username>`
@@ -260,9 +260,17 @@ Perintah:
 !ttmenu
 !ttissue bansos,pilkada,jalanrusak 60
 !ttissue sockpuppet bansos,pilkada,jalanrusak 60
+!ttissue narrative polisi,tilang,surabaya 60
 ```
 
-Pipeline memakai RapidAPI `tiktok-api23` (`/api/search/video`) dan mengekspor artefak graph:
+Pipeline memakai RapidAPI `tiktok-api23` (`/api/search/video`) dengan dua layer:
+
+- `tiktok_issue` untuk issue hunter periodik (jam/harian),
+- `tiktok_narrative` untuk Real-time Narrative Tracker (RTNT) per 5-15 menit.
+
+Mode `narrative/rtnt` menambah assignment post→narrative, window metrics, dan event `BURST`/`DRIFT`/`TAKEOVER`, serta publish `pg_notify('tiktok_narrative_event', ...)`.
+
+Pipeline juga mengekspor artefak graph:
 
 - `issues.json`
 - `nodes.csv`

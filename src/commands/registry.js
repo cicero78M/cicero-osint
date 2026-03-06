@@ -30,7 +30,7 @@ function getHelpMessage() {
     `${env.BOT_PREFIX}xissue <keyword_csv> <window_menit(15-1440)|60>`,
     `${env.BOT_PREFIX}ttmenu`,
     `${env.BOT_PREFIX}ttissue <keyword_csv> <window_menit(15-1440)|60>`,
-    `${env.BOT_PREFIX}ttissue <submenu:all|crawl|issue|sockpuppet|graph> <keyword_csv> <window_menit(15-1440)|60>`,
+    `${env.BOT_PREFIX}ttissue <submenu:all|crawl|issue|sockpuppet|graph|narrative|rtnt> <keyword_csv> <window_menit(15-1440)|60>`,
     `${env.BOT_PREFIX}help`,
     '',
     `Tipe dokumen preset: ${DOCUMENT_TYPES.join(', ')}`,
@@ -383,6 +383,8 @@ async function handleCommand(text) {
       '   Jalankan deteksi cluster sockpuppet.',
       `5) ${env.BOT_PREFIX}ttissue graph <keyword_csv> <window_menit|60>`,
       '   Export graph intelligence (issues.json, nodes.csv, edges.csv).',
+      `6) ${env.BOT_PREFIX}ttissue narrative <keyword_csv> <window_menit|60>`,
+      '   Jalankan Real-time Narrative Tracker (RTNT): assignment + burst/drift/takeover event.',
       '',
       '*Format lama tetap didukung:*',
       `- ${env.BOT_PREFIX}ttissue <keyword_csv> <window_menit|60> (default: all)`,
@@ -392,7 +394,7 @@ async function handleCommand(text) {
   }
 
   if (command === 'ttissue' || command === 'tiktokissue' || command === 'tthunter') {
-    const SUBMENUS = new Set(['all', 'crawl', 'issue', 'sockpuppet', 'graph']);
+    const SUBMENUS = new Set(['all', 'crawl', 'issue', 'sockpuppet', 'graph', 'narrative', 'rtnt']);
     let submenu = 'all';
     let keywords;
     let windowMinutesInput;
@@ -411,7 +413,7 @@ async function handleCommand(text) {
         'Status: *Format argumen tidak valid*',
         '',
         `Gunakan format: ${env.BOT_PREFIX}ttissue <keyword_csv> <window_menit(15-1440)|60>`,
-        `Atau: ${env.BOT_PREFIX}ttissue <submenu:all|crawl|issue|sockpuppet|graph> <keyword_csv> <window_menit|60>`,
+        `Atau: ${env.BOT_PREFIX}ttissue <submenu:all|crawl|issue|sockpuppet|graph|narrative|rtnt> <keyword_csv> <window_menit|60>`,
         `Lihat detail submenu: ${env.BOT_PREFIX}ttmenu`
       ].join('\n');
     }
@@ -444,6 +446,7 @@ async function handleCommand(text) {
         `Issue terdeteksi: ${result.issues.length}`,
         `Actor network edges: ${result.actorNetwork.length}`,
         `Sockpuppet cluster: ${result.sockpuppetClusters.length}`,
+        `Narrative events: ${result.narrativeTracker.emittedEvents} (narrative aktif tersentuh: ${result.narrativeTracker.touchedNarratives})`,
         '',
         '*Top issue cluster:*',
         ...(issueLines.length ? issueLines : ['- Belum ada cluster issue yang memenuhi threshold minimum.']),
