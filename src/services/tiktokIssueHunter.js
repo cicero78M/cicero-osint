@@ -103,6 +103,74 @@ function bucketBySimilarity(items, threshold = 0.33) {
   return clusters;
 }
 
+
+
+function floorToWindow(date, windowMinutes) {
+  const ms = windowMinutes * 60 * 1000;
+  const t = new Date(date).getTime();
+  return new Date(Math.floor(t / ms) * ms);
+}
+
+function buildSparseVector(tokens) {
+  const freq = {};
+  for (const token of tokens) {
+    freq[token] = (freq[token] || 0) + 1;
+  }
+  const norm = Math.sqrt(Object.values(freq).reduce((acc, v) => acc + (v * v), 0)) || 1;
+  for (const key of Object.keys(freq)) {
+    freq[key] = Number((freq[key] / norm).toFixed(6));
+  }
+  return freq;
+}
+
+function cosineSparse(vecA = {}, vecB = {}) {
+  const keysA = Object.keys(vecA);
+  const keysB = new Set(Object.keys(vecB));
+  if (!keysA.length || !keysB.size) return 0;
+  let dot = 0;
+  for (const key of keysA) {
+    if (keysB.has(key)) dot += (vecA[key] || 0) * (vecB[key] || 0);
+  }
+  return Number(Math.max(-1, Math.min(1, dot)).toFixed(6));
+}
+
+function blendSparseVectors(oldVec = {}, newVec = {}, alpha = 0.1, limit = 120) {
+  const keySet = new Set([...Object.keys(oldVec), ...Object.keys(newVec)]);
+  const merged = {};
+  for (const key of keySet) {
+    const v = ((oldVec[key] || 0) * (1 - alpha)) + ((newVec[key] || 0) * alpha);
+    if (v > 0) merged[key] = v;
+  }
+
+  const norm = Math.sqrt(Object.values(merged).reduce((acc, v) => acc + (v * v), 0)) || 1;
+  const trimmed = Object.entries(merged)
+    .map(([k, v]) => [k, Number((v / norm).toFixed(6))])
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit);
+  return Object.fromEntries(trimmed);
+}
+
+function topTermsFromVector(vec = {}, size = 8) {
+  return Object.entries(vec)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, size)
+    .map(([token]) => token);
+}
+
+function inferFrameTags(normalizedText) {
+  const text = String(normalizedText || '');
+  const tags = [];
+  if (/polisi|tilang|aparat/.test(text) && /pemeras|zalim|ketidakadilan/.test(text)) tags.push('anti_police', 'injustice');
+  if (/hoaks|rumor|katanya|diduga/.test(text)) tags.push('rumor');
+  if (/takut|panik|mencekam|teror/.test(text)) tags.push('fear');
+  return [...new Set(tags)];
+}
+
+function buildNarrativeLabel(vec = {}, hashtags = []) {
+  const topTerms = topTermsFromVector(vec, 4);
+  const topHashtags = [...new Set(hashtags || [])].slice(0, 2);
+  return [...topTerms, ...topHashtags].filter(Boolean).join(' ').trim() || 'narrative-unknown';
+}
 function parseRapidItems(payload) {
   if (Array.isArray(payload?.data?.videos)) return payload.data.videos;
   if (Array.isArray(payload?.data?.items)) return payload.data.items;
@@ -424,6 +492,270 @@ class TikTokIssueHunter {
     return clusters;
   }
 
+  async runRealtimeNarrativeTracker(windowMinutes = 60, options = {}) {
+    const safeWindow = clamp(windowMinutes, 15, 1440, 60);
+    const assignmentThreshold = clamp(options.assignmentThreshold, 0.5, 0.95, 0.78);
+    const alpha = clamp(options.alpha, 0.01, 0.4, 0.1);
+    const trackerWindow = clamp(options.trackerWindowMinutes, 5, 15, 10);
+    const limitPosts = clamp(options.maxPosts, 10, 1000, 500);
+
+    logProcess('narrative_tracker_started', {
+      windowMinutes: safeWindow,
+      assignmentThreshold,
+      alpha,
+      trackerWindow,
+      limitPosts
+    });
+
+    const activeNarrativesResult = await this.pool.query(
+      `select narrative_id, label, centroid_json, top_entities, frame_tags, confidence
+       from tiktok_narrative
+       where status = 'active'
+       order by updated_at desc`
+    );
+
+    const narratives = activeNarrativesResult.rows.map((row) => ({
+      narrative_id: row.narrative_id,
+      label: row.label,
+      centroid: row.centroid_json || {},
+      top_entities: row.top_entities || {},
+      frame_tags: row.frame_tags || [],
+      confidence: Number(row.confidence || 0)
+    }));
+
+    const newPostsResult = await this.pool.query(
+      `select p.post_id, p.author_id, p.author_username, p.created_at, p.text,
+              coalesce(p.like_count, 0) as like_count,
+              coalesce(p.comment_count, 0) as comment_count,
+              coalesce(p.share_count, 0) as share_count,
+              coalesce(p.play_count, 0) as play_count
+       from tiktok_post p
+       left join tiktok_narrative_map nm on nm.post_id = p.post_id
+       where nm.post_id is null
+         and p.created_at >= now() - ($1::int || ' minutes')::interval
+       order by p.created_at asc
+       limit $2`,
+      [safeWindow, limitPosts]
+    );
+
+    const touchedNarratives = new Set();
+    let assignedPosts = 0;
+    let createdNarratives = 0;
+
+    for (const post of newPostsResult.rows) {
+      const tokens = tokenize(post.text);
+      if (!tokens.length) continue;
+      const vector = buildSparseVector(tokens);
+
+      let best = null;
+      for (const narrative of narratives) {
+        const sim = cosineSparse(vector, narrative.centroid);
+        if (!best || sim > best.similarity) {
+          best = { narrative, similarity: sim };
+        }
+      }
+
+      let narrativeRef;
+      let similarity;
+      if (!best || best.similarity < assignmentThreshold) {
+        const frameTags = inferFrameTags(normalizeText(post.text));
+        const label = buildNarrativeLabel(vector, extractEntities(post.text).hashtags);
+        const inserted = await this.pool.query(
+          `insert into tiktok_narrative(label, centroid_json, centroid_dim, top_entities, frame_tags, confidence)
+           values ($1, $2::jsonb, $3, $4::jsonb, $5::text[], $6)
+           returning narrative_id`,
+          [label, JSON.stringify(vector), Object.keys(vector).length, JSON.stringify({ hashtags: extractEntities(post.text).hashtags, mentions: extractEntities(post.text).mentions }), frameTags, 0.55]
+        );
+        narrativeRef = {
+          narrative_id: inserted.rows[0].narrative_id,
+          label,
+          centroid: vector,
+          top_entities: { hashtags: extractEntities(post.text).hashtags, mentions: extractEntities(post.text).mentions },
+          frame_tags: frameTags,
+          confidence: 0.55
+        };
+        narratives.push(narrativeRef);
+        similarity = 1;
+        createdNarratives += 1;
+
+        await this.pool.query(
+          `insert into tiktok_narrative_event(narrative_id, event_type, payload)
+           values ($1, 'NEW_NARRATIVE', $2::jsonb)`,
+          [narrativeRef.narrative_id, JSON.stringify({ post_id: post.post_id, label: narrativeRef.label })]
+        );
+      } else {
+        narrativeRef = best.narrative;
+        similarity = best.similarity;
+        const updatedCentroid = blendSparseVectors(narrativeRef.centroid, vector, alpha);
+        narrativeRef.centroid = updatedCentroid;
+        narrativeRef.label = buildNarrativeLabel(updatedCentroid, narrativeRef.top_entities?.hashtags || []);
+        narrativeRef.confidence = Number(Math.min(0.99, Math.max(0.1, best.similarity)).toFixed(3));
+
+        await this.pool.query(
+          `update tiktok_narrative
+           set centroid_json = $2::jsonb,
+               centroid_dim = $3,
+               label = $4,
+               confidence = $5,
+               updated_at = now()
+           where narrative_id = $1`,
+          [narrativeRef.narrative_id, JSON.stringify(updatedCentroid), Object.keys(updatedCentroid).length, narrativeRef.label, narrativeRef.confidence]
+        );
+      }
+
+      await this.pool.query(
+        `insert into tiktok_narrative_map(narrative_id, post_id, similarity)
+         values ($1,$2,$3)
+         on conflict (narrative_id, post_id) do nothing`,
+        [narrativeRef.narrative_id, post.post_id, similarity]
+      );
+
+      touchedNarratives.add(narrativeRef.narrative_id);
+      assignedPosts += 1;
+    }
+
+    const events = [];
+    const windowEnd = new Date();
+    const windowStart = floorToWindow(windowEnd, trackerWindow);
+    const nextWindow = new Date(windowStart.getTime() + (trackerWindow * 60 * 1000));
+
+    for (const narrativeId of touchedNarratives) {
+      const metricResult = await this.pool.query(
+        `with sample as (
+           select p.post_id, p.author_id, p.text,
+                  (coalesce(p.like_count,0) + coalesce(p.comment_count,0) * 2 + coalesce(p.share_count,0) * 3 + coalesce(p.play_count,0) * 0.1)::bigint as engagement
+           from tiktok_narrative_map nm
+           join tiktok_post p on p.post_id = nm.post_id
+           where nm.narrative_id = $1
+             and p.created_at >= $2
+             and p.created_at < $3
+         )
+         select count(*)::int as post_count,
+                count(distinct author_id)::int as authors_count,
+                coalesce(sum(engagement), 0)::bigint as engagement_sum,
+                array_remove(array_agg(author_id order by author_id), null) as authors,
+                array_remove(array_agg(post_id order by post_id desc), null) as sample_posts,
+                array_remove(array_agg(text), null) as texts
+         from sample`,
+        [narrativeId, windowStart.toISOString(), nextWindow.toISOString()]
+      );
+
+      const m = metricResult.rows[0];
+      const postCount = Number(m.post_count || 0);
+      if (postCount === 0) continue;
+      const authorsCount = Number(m.authors_count || 0);
+      const engagementSum = Number(m.engagement_sum || 0);
+      const velocity = Number((postCount / trackerWindow).toFixed(4));
+
+      const baselineResult = await this.pool.query(
+        `select coalesce(avg(velocity), 0)::numeric as baseline_velocity
+         from tiktok_narrative_window
+         where narrative_id = $1
+           and window_start >= now() - interval '6 hours'`,
+        [narrativeId]
+      );
+      const baseline = Number(baselineResult.rows[0]?.baseline_velocity || 0);
+      const burstScore = Number((velocity / Math.max(baseline, 0.0001)).toFixed(4));
+
+      const prevWindowResult = await this.pool.query(
+        `select top_terms
+         from tiktok_narrative_window
+         where narrative_id = $1
+         order by window_start desc
+         limit 1`,
+        [narrativeId]
+      );
+
+      const termBag = tokenize((m.texts || []).join(' '));
+      const currTerms = [...new Set(termBag)].slice(0, 20);
+      const prevTerms = Array.isArray(prevWindowResult.rows[0]?.top_terms) ? prevWindowResult.rows[0].top_terms : [];
+      const driftScore = Number((1 - jaccard(currTerms, prevTerms)).toFixed(4));
+
+      await this.pool.query(
+        `insert into tiktok_narrative_window(narrative_id, window_start, window_end, post_count, authors_count, engagement_sum, velocity, burst_score, drift_score, top_terms)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)
+         on conflict (narrative_id, window_start)
+         do update set
+           window_end = excluded.window_end,
+           post_count = excluded.post_count,
+           authors_count = excluded.authors_count,
+           engagement_sum = excluded.engagement_sum,
+           velocity = excluded.velocity,
+           burst_score = excluded.burst_score,
+           drift_score = excluded.drift_score,
+           top_terms = excluded.top_terms`,
+        [narrativeId, windowStart.toISOString(), nextWindow.toISOString(), postCount, authorsCount, engagementSum, velocity, burstScore, driftScore, JSON.stringify(currTerms)]
+      );
+
+      const topAuthorResult = await this.pool.query(
+        `select p.author_id, count(*)::int as posts
+         from tiktok_narrative_map nm
+         join tiktok_post p on p.post_id = nm.post_id
+         where nm.narrative_id = $1
+           and p.created_at >= $2
+           and p.created_at < $3
+         group by p.author_id
+         order by posts desc
+         limit 1`,
+        [narrativeId, windowStart.toISOString(), nextWindow.toISOString()]
+      );
+
+      const topAuthorPosts = Number(topAuthorResult.rows[0]?.posts || 0);
+      const topAuthorShare = postCount > 0 ? Number((topAuthorPosts / postCount).toFixed(4)) : 0;
+
+      const eventCandidates = [];
+      if (burstScore >= 4 && postCount >= 15) eventCandidates.push('BURST');
+      if (driftScore >= 0.22 && postCount >= 10) eventCandidates.push('DRIFT');
+      if (topAuthorShare >= 0.35 && postCount >= 10) eventCandidates.push('TAKEOVER');
+
+      for (const eventType of eventCandidates) {
+        const payload = {
+          narrative_id: narrativeId,
+          window_start: windowStart.toISOString(),
+          window_end: nextWindow.toISOString(),
+          metrics: {
+            post_count: postCount,
+            authors_count: authorsCount,
+            engagement_sum: engagementSum,
+            velocity: velocity,
+            burst_score: burstScore,
+            drift_score: driftScore,
+            top_author_share: topAuthorShare
+          },
+          sample_posts: (m.sample_posts || []).slice(0, 10),
+          top_terms: currTerms.slice(0, 10)
+        };
+
+        await this.pool.query(
+          `insert into tiktok_narrative_event(narrative_id, event_type, payload)
+           values ($1,$2,$3::jsonb)`,
+          [narrativeId, eventType, JSON.stringify(payload)]
+        );
+
+        await this.pool.query(`select pg_notify('tiktok_narrative_event', $1)`, [JSON.stringify({ type: eventType, ...payload })]);
+        events.push({ type: eventType, ...payload });
+      }
+    }
+
+    logProcess('narrative_tracker_completed', {
+      postsFetched: newPostsResult.rows.length,
+      assignedPosts,
+      createdNarratives,
+      touchedNarratives: touchedNarratives.size,
+      emittedEvents: events.length
+    });
+
+    return {
+      mode: 'narrative',
+      postsFetched: newPostsResult.rows.length,
+      assignedPosts,
+      createdNarratives,
+      touchedNarratives: touchedNarratives.size,
+      emittedEvents: events.length,
+      events
+    };
+  }
+
   async exportGraphArtifacts(caseId) {
     const outDir = path.join(env.TIKTOK_ISSUE_HUNTER_WORKDIR, caseId);
     logProcess('graph_export_started', { caseId, outDir });
@@ -487,17 +819,18 @@ async function runTikTokIssueHunter({ keywords, windowMinutes, mode = 'all' }) {
   }
 
   const safeWindow = clamp(windowMinutes, 15, 1440, 60);
-  const safeMode = ['all', 'crawl', 'issue', 'sockpuppet', 'graph'].includes(String(mode).toLowerCase())
+  const safeMode = ['all', 'crawl', 'issue', 'sockpuppet', 'graph', 'narrative', 'rtnt'].includes(String(mode).toLowerCase())
     ? String(mode).toLowerCase()
     : 'all';
   logProcess('pipeline_started', { keywords: parsedKeywords, windowMinutes: safeWindow, mode: safeMode });
 
   const engine = new TikTokIssueHunter();
   try {
-    const shouldIngest = safeMode === 'all' || safeMode === 'crawl';
+    const shouldIngest = safeMode === 'all' || safeMode === 'crawl' || safeMode === 'narrative' || safeMode === 'rtnt';
     const shouldIssue = safeMode === 'all' || safeMode === 'issue';
     const shouldSockpuppet = safeMode === 'all' || safeMode === 'sockpuppet';
     const shouldGraph = safeMode === 'all' || safeMode === 'graph';
+    const shouldNarrative = safeMode === 'all' || safeMode === 'narrative' || safeMode === 'rtnt';
 
     const ingestion = shouldIngest
       ? await engine.ingestRecent(parsedKeywords, safeWindow)
@@ -505,6 +838,9 @@ async function runTikTokIssueHunter({ keywords, windowMinutes, mode = 'all' }) {
     const issues = shouldIssue ? await engine.discoverIssues(safeWindow) : [];
     const actorNetwork = shouldIssue ? await engine.buildActorNetwork(safeWindow) : [];
     const sockpuppetClusters = shouldSockpuppet ? await engine.detectSockpuppet(safeWindow) : [];
+    const narrativeTracker = shouldNarrative
+      ? await engine.runRealtimeNarrativeTracker(safeWindow)
+      : { mode: 'narrative', postsFetched: 0, assignedPosts: 0, createdNarratives: 0, touchedNarratives: 0, emittedEvents: 0, events: [] };
     const caseId = `ttissue-${Date.now()}`;
     const exported = shouldGraph
       ? await engine.exportGraphArtifacts(caseId)
@@ -515,7 +851,8 @@ async function runTikTokIssueHunter({ keywords, windowMinutes, mode = 'all' }) {
       inserted: ingestion.inserted,
       issues: issues.length,
       actorNetworkEdges: actorNetwork.length,
-      sockpuppetClusters: sockpuppetClusters.length
+      sockpuppetClusters: sockpuppetClusters.length,
+      narrativeEvents: narrativeTracker.emittedEvents
     });
 
     return {
@@ -524,6 +861,7 @@ async function runTikTokIssueHunter({ keywords, windowMinutes, mode = 'all' }) {
       issues,
       actorNetwork,
       sockpuppetClusters,
+      narrativeTracker,
       mode: safeMode,
       exports: exported
     };

@@ -77,6 +77,53 @@ create table if not exists tiktok_sockpuppet_member (
   primary key (cluster_id, author_id)
 );
 
+create table if not exists tiktok_narrative (
+  narrative_id bigserial primary key,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  status text default 'active',
+  label text,
+  centroid_json jsonb,
+  centroid_dim int,
+  top_entities jsonb,
+  frame_tags text[],
+  confidence numeric default 0.0
+);
+
+create table if not exists tiktok_narrative_map (
+  narrative_id bigint references tiktok_narrative(narrative_id) on delete cascade,
+  post_id text references tiktok_post(post_id) on delete cascade,
+  similarity numeric,
+  assigned_at timestamptz default now(),
+  primary key (narrative_id, post_id)
+);
+
+create table if not exists tiktok_narrative_window (
+  narrative_id bigint references tiktok_narrative(narrative_id) on delete cascade,
+  window_start timestamptz not null,
+  window_end timestamptz not null,
+  post_count int not null,
+  authors_count int not null,
+  engagement_sum bigint not null,
+  velocity numeric not null,
+  burst_score numeric not null,
+  drift_score numeric not null,
+  top_terms jsonb,
+  primary key (narrative_id, window_start)
+);
+
+create table if not exists tiktok_narrative_event (
+  event_id bigserial primary key,
+  created_at timestamptz default now(),
+  narrative_id bigint,
+  event_type text,
+  payload jsonb
+);
+
 create index if not exists idx_tiktok_mention_value on tiktok_mention(mention);
 create index if not exists idx_tiktok_author_username on tiktok_author(username);
 create index if not exists idx_tiktok_post_keyword_keyword on tiktok_post_keyword(keyword);
+create index if not exists idx_tiktok_narrative_updated_at on tiktok_narrative(updated_at);
+create index if not exists idx_tiktok_narrative_map_assigned_at on tiktok_narrative_map(assigned_at);
+create index if not exists idx_tiktok_narrative_window_time on tiktok_narrative_window(window_start desc);
+create index if not exists idx_tiktok_narrative_event_created_at on tiktok_narrative_event(created_at desc);
