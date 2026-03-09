@@ -10,11 +10,215 @@ const { runTwitterIssueHunter } = require('../services/twitterIssueHunter');
 const { runTikTokIssueHunter } = require('../services/tiktokIssueHunter');
 const { env } = require('../config/env');
 
+const workflowSessions = new Map();
+
+const WORKFLOW_STAGE = {
+  MAIN: 'MAIN',
+  DISCOVERY: 'DISCOVERY',
+  COLLECTION: 'COLLECTION',
+  ANALYSIS: 'ANALYSIS',
+  FORENSIC: 'FORENSIC',
+  COMPLIANCE: 'COMPLIANCE'
+};
+
+function buildMainMenu() {
+  return [
+    '🧭 *CICERO OSINT Workflow (Bertahap)*',
+    '',
+    'Pilih tahapan investigasi:',
+    '1) Discovery & validasi akun',
+    '2) Koleksi data lintas platform',
+    '3) Analisis isu & jejaring',
+    '4) Forensik media (EXIF & arsip)',
+    '5) Legal/etika & compliance checklist',
+    '0) Keluar dari workflow',
+    '',
+    `Balas angka pilihan (mis. *1*) atau ketik *${env.BOT_PREFIX}back* untuk kembali.`
+  ].join('\n');
+}
+
+function buildSubmenu(stage) {
+  if (stage === WORKFLOW_STAGE.DISCOVERY) {
+    return [
+      '🔎 *Tahap 1: Discovery & Validasi Akun*',
+      '',
+      '1) Username sweep cepat (Sherlock)',
+      '2) Username dossier mendalam (Maigret)',
+      '3) Email footprint (Holehe)',
+      '4) Lanjut ke tahap koleksi data',
+      '9) Kembali ke menu utama'
+    ].join('\n');
+  }
+
+  if (stage === WORKFLOW_STAGE.COLLECTION) {
+    return [
+      '📥 *Tahap 2: Koleksi Data*',
+      '',
+      '1) Instagram collector (Instaloader)',
+      '2) Domain intel (theHarvester)',
+      '3) Google dork dokumen (dorkdoc)',
+      '4) Social media intel ringkas (socmint)',
+      '5) Lanjut ke tahap analisis isu',
+      '9) Kembali ke menu utama'
+    ].join('\n');
+  }
+
+  if (stage === WORKFLOW_STAGE.ANALYSIS) {
+    return [
+      '📊 *Tahap 3: Analisis Isu & Jejaring*',
+      '',
+      '1) Twitter/X Issue Hunter (xissue)',
+      '2) TikTok Issue Hunter (ttissue)',
+      '3) Mini graph OSINT (minim)',
+      '4) Lanjut ke tahap forensik media',
+      '9) Kembali ke menu utama'
+    ].join('\n');
+  }
+
+  if (stage === WORKFLOW_STAGE.FORENSIC) {
+    return [
+      '🧪 *Tahap 4: Forensik Media*',
+      '',
+      `1) EXIF metadata (kirim/reply gambar lalu *${env.BOT_PREFIX}exif*)`,
+      '2) Rekomendasi arsip media (instaloader + dorkdoc)',
+      '3) Lanjut ke tahap compliance',
+      '9) Kembali ke menu utama'
+    ].join('\n');
+  }
+
+  if (stage === WORKFLOW_STAGE.COMPLIANCE) {
+    return [
+      '⚖️ *Tahap 5: Legal/Etika & Compliance*',
+      '',
+      'Checklist sebelum eksekusi lanjutan:',
+      '- Validasi otorisasi & tujuan investigasi',
+      '- Batasi scope (keyword/time window minimal)',
+      '- Hindari automation yang melanggar ToS platform',
+      '- Proteksi token/credential & artefak hasil',
+      '- Simpan chain-of-custody (timestamp + hash)',
+      '',
+      '1) Kembali ke menu utama',
+      '0) Selesai & tutup workflow'
+    ].join('\n');
+  }
+
+  return buildMainMenu();
+}
+
+function hasActiveWorkflow(sessionId) {
+  return Boolean(sessionId && workflowSessions.has(sessionId));
+}
+
+function getActionHint(stage, option) {
+  const hintByStage = {
+    [WORKFLOW_STAGE.DISCOVERY]: {
+      1: `Jalankan: ${env.BOT_PREFIX}sherlock <username>`,
+      2: `Jalankan: ${env.BOT_PREFIX}maigret <username>`,
+      3: `Jalankan: ${env.BOT_PREFIX}holehe <email>`
+    },
+    [WORKFLOW_STAGE.COLLECTION]: {
+      1: `Jalankan: ${env.BOT_PREFIX}instaloader <username>`,
+      2: `Jalankan: ${env.BOT_PREFIX}theharvester <domain>`,
+      3: `Jalankan: ${env.BOT_PREFIX}dorkdoc <keyword>`,
+      4: `Jalankan: ${env.BOT_PREFIX}socmint <handle_csv|-> <email_csv|-> <link_csv|-> <keyword_csv|-> <hashtag_csv|->`
+    },
+    [WORKFLOW_STAGE.ANALYSIS]: {
+      1: `Jalankan: ${env.BOT_PREFIX}xissue <keyword_csv> <window_menit|60>`,
+      2: `Jalankan: ${env.BOT_PREFIX}ttissue <submenu|all> <keyword_csv> <window_menit|60>`,
+      3: `Jalankan: ${env.BOT_PREFIX}minim <domain|-> <email_csv|-> <username_csv|->`
+    },
+    [WORKFLOW_STAGE.FORENSIC]: {
+      1: `Jalankan: ${env.BOT_PREFIX}exif (dengan reply gambar)`,
+      2: `Arsip cepat: ${env.BOT_PREFIX}instaloader <username> + ${env.BOT_PREFIX}dorkdoc <keyword>`
+    }
+  };
+
+  return hintByStage[stage]?.[option] || null;
+}
+
+function handleWorkflowInput(rawText, sessionId) {
+  if (!sessionId) return null;
+  const input = String(rawText || '').trim().toLowerCase();
+  if (!input) return null;
+
+  if (input === `${env.BOT_PREFIX}osint` || input === `${env.BOT_PREFIX}menu`) {
+    workflowSessions.set(sessionId, WORKFLOW_STAGE.MAIN);
+    return buildMainMenu();
+  }
+
+  if (input === `${env.BOT_PREFIX}back`) {
+    workflowSessions.set(sessionId, WORKFLOW_STAGE.MAIN);
+    return buildMainMenu();
+  }
+
+  const stage = workflowSessions.get(sessionId);
+  if (!stage) return null;
+
+  if (input === '0') {
+    workflowSessions.delete(sessionId);
+    return `✅ Workflow ditutup. Ketik *${env.BOT_PREFIX}osint* kapan saja untuk memulai lagi.`;
+  }
+
+  if (stage === WORKFLOW_STAGE.MAIN) {
+    const map = {
+      '1': WORKFLOW_STAGE.DISCOVERY,
+      '2': WORKFLOW_STAGE.COLLECTION,
+      '3': WORKFLOW_STAGE.ANALYSIS,
+      '4': WORKFLOW_STAGE.FORENSIC,
+      '5': WORKFLOW_STAGE.COMPLIANCE
+    };
+
+    if (map[input]) {
+      workflowSessions.set(sessionId, map[input]);
+      return buildSubmenu(map[input]);
+    }
+
+    return `Pilihan tidak dikenali.\n\n${buildMainMenu()}`;
+  }
+
+  if (input === '9') {
+    workflowSessions.set(sessionId, WORKFLOW_STAGE.MAIN);
+    return buildMainMenu();
+  }
+
+  const navNext = {
+    [WORKFLOW_STAGE.DISCOVERY]: { '4': WORKFLOW_STAGE.COLLECTION },
+    [WORKFLOW_STAGE.COLLECTION]: { '5': WORKFLOW_STAGE.ANALYSIS },
+    [WORKFLOW_STAGE.ANALYSIS]: { '4': WORKFLOW_STAGE.FORENSIC },
+    [WORKFLOW_STAGE.FORENSIC]: { '3': WORKFLOW_STAGE.COMPLIANCE },
+    [WORKFLOW_STAGE.COMPLIANCE]: { '1': WORKFLOW_STAGE.MAIN }
+  };
+
+  if (navNext[stage]?.[input]) {
+    const nextStage = navNext[stage][input];
+    workflowSessions.set(sessionId, nextStage);
+    return buildSubmenu(nextStage);
+  }
+
+  const actionHint = getActionHint(stage, Number(input));
+  if (actionHint) {
+    return [
+      `✅ Pilihan tahap diterima (${stage}).`,
+      actionHint,
+      '',
+      `Setelah eksekusi, balas *9* untuk kembali atau lanjut pilih di submenu ini:`,
+      buildSubmenu(stage)
+    ].join('\n');
+  }
+
+  return [
+    'Pilihan tidak valid di tahap ini.',
+    '',
+    buildSubmenu(stage)
+  ].join('\n');
+}
+
 function getHelpMessage() {
   return [
     '*CICERO Sherlock Bot*',
     '',
     `Perintah:`,
+    `${env.BOT_PREFIX}osint (workflow bertahap baru)`,
     `${env.BOT_PREFIX}ping`,
     `${env.BOT_PREFIX}sherlock <username>`,
     `${env.BOT_PREFIX}holehe <email>`,
@@ -28,7 +232,6 @@ function getHelpMessage() {
     `${env.BOT_PREFIX}minim <domain|-> <email_csv|-> <username_csv|-> (alias: miniosint, maltego)`,
     `${env.BOT_PREFIX}socmint <handle_csv|-> <email_csv|-> <link_csv|-> <keyword_csv|-> <hashtag_csv|->`,
     `${env.BOT_PREFIX}xissue <keyword_csv> <window_menit(15-1440)|60>`,
-    `${env.BOT_PREFIX}ttmenu`,
     `${env.BOT_PREFIX}ttissue <keyword_csv> <window_menit(15-1440)|60>`,
     `${env.BOT_PREFIX}ttissue <submenu:all|crawl|issue|sockpuppet|graph|narrative|rtnt> <keyword_csv> <window_menit(15-1440)|60>`,
     `${env.BOT_PREFIX}help`,
@@ -48,6 +251,10 @@ async function handleCommand(text) {
   const command = (cmd || '').toLowerCase();
 
   if (!command || command === 'help') return getHelpMessage();
+
+  if (command === 'osint' || command === 'menu') {
+    return buildMainMenu();
+  }
 
   if (command === 'ping') {
     return 'pong ✅';
@@ -369,28 +576,7 @@ async function handleCommand(text) {
 
 
   if (command === 'ttmenu' || command === 'tiktokmenu' || command === 'tthuntermenu') {
-    return [
-      '🎯 *TikTok Issue Hunter Menu*',
-      '',
-      '*Submenu tersedia:*',
-      `1) ${env.BOT_PREFIX}ttissue all <keyword_csv> <window_menit|60>`,
-      '   Jalankan pipeline lengkap (crawler + issue + sockpuppet + graph).',
-      `2) ${env.BOT_PREFIX}ttissue crawl <keyword_csv> <window_menit|60>`,
-      '   Hanya ingest data TikTok dari RapidAPI ke PostgreSQL.',
-      `3) ${env.BOT_PREFIX}ttissue issue <keyword_csv> <window_menit|60>`,
-      '   Jalankan deteksi burst issue + mapping post ke issue.',
-      `4) ${env.BOT_PREFIX}ttissue sockpuppet <keyword_csv> <window_menit|60>`,
-      '   Jalankan deteksi cluster sockpuppet.',
-      `5) ${env.BOT_PREFIX}ttissue graph <keyword_csv> <window_menit|60>`,
-      '   Export graph intelligence (issues.json, nodes.csv, edges.csv).',
-      `6) ${env.BOT_PREFIX}ttissue narrative <keyword_csv> <window_menit|60>`,
-      '   Jalankan Real-time Narrative Tracker (RTNT): assignment + burst/drift/takeover event.',
-      '',
-      '*Format lama tetap didukung:*',
-      `- ${env.BOT_PREFIX}ttissue <keyword_csv> <window_menit|60> (default: all)`,
-      '',
-      `Contoh: ${env.BOT_PREFIX}ttissue sockpuppet polisi,tilang,surabaya 60`
-    ].join('\n');
+    return `Menu lama TikTok Hunter sudah dipensiunkan. Gunakan workflow baru: ${env.BOT_PREFIX}osint → Tahap 3 (Analisis Isu & Jejaring).`;
   }
 
   if (command === 'ttissue' || command === 'tiktokissue' || command === 'tthunter') {
@@ -566,4 +752,4 @@ async function handleCommand(text) {
   return `Perintah tidak dikenal. Ketik ${env.BOT_PREFIX}help`;
 }
 
-module.exports = { handleCommand, getHelpMessage };
+module.exports = { handleCommand, getHelpMessage, handleWorkflowInput, hasActiveWorkflow, buildMainMenu };

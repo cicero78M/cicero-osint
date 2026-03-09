@@ -2,7 +2,7 @@ const fs = require('fs/promises');
 const P = require('pino');
 const qrcode = require('qrcode-terminal');
 const { env } = require('../config/env');
-const { handleCommand } = require('../commands/registry');
+const { handleCommand, handleWorkflowInput, hasActiveWorkflow, buildMainMenu } = require('../commands/registry');
 const { processExifFromBuffer } = require('../services/exif');
 
 const logger = P({ level: 'info' });
@@ -419,6 +419,7 @@ async function startWhatsAppClient() {
       incoming.message?.extendedTextMessage?.text ||
       '';
     const normalizedText = text.trim();
+    const workflowSessionId = `${remoteJid}:${incoming.key.participant || incoming.key.remoteJid || '-'}`;
     const isBotCommand = normalizedText.startsWith(commandPrefix);
     const commandPayload = isBotCommand ? normalizedText.slice(commandPrefix.length).trim() : '';
     const [commandName, ...commandArgs] = commandPayload.split(/\s+/);
@@ -490,6 +491,20 @@ async function startWhatsAppClient() {
       }
 
       if (!normalizedText) return;
+
+      if (normalizedText.toLowerCase() === `${commandPrefix}osint` || normalizedText.toLowerCase() === `${commandPrefix}menu`) {
+        const menuText = handleWorkflowInput(`${commandPrefix}osint`, workflowSessionId) || buildMainMenu();
+        await sock.sendMessage(remoteJid, { text: menuText }, { quoted: incoming });
+        return;
+      }
+
+      if (!isBotCommand && hasActiveWorkflow(workflowSessionId)) {
+        const workflowResponse = handleWorkflowInput(normalizedText, workflowSessionId);
+        if (workflowResponse) {
+          await sock.sendMessage(remoteJid, { text: workflowResponse }, { quoted: incoming });
+          return;
+        }
+      }
 
       if (normalizedText.toLowerCase().startsWith(exifPrefix.toLowerCase())) {
         const quotedImageSource = getQuotedImageSource(incoming);
