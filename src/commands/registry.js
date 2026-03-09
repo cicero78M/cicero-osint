@@ -14,9 +14,12 @@ const workflowSessions = new Map();
 
 const WORKFLOW_STAGE = {
   MAIN: 'MAIN',
+  SEEDING: 'SEEDING',
   DISCOVERY: 'DISCOVERY',
+  VERIFICATION: 'VERIFICATION',
   COLLECTION: 'COLLECTION',
   ANALYSIS: 'ANALYSIS',
+  REPORTING: 'REPORTING',
   FORENSIC: 'FORENSIC',
   COMPLIANCE: 'COMPLIANCE'
 };
@@ -26,11 +29,14 @@ function buildMainMenu() {
     '🧭 *CICERO OSINT Workflow (Bertahap)*',
     '',
     'Pilih tahapan investigasi:',
-    '1) Discovery & validasi akun',
-    '2) Koleksi data lintas platform',
-    '3) Analisis isu & jejaring',
-    '4) Forensik media (EXIF & arsip)',
-    '5) Legal/etika & compliance checklist',
+    '1) Seed definition & scoping',
+    '2) Discovery kandidat akun',
+    '3) Verifikasi manual kandidat',
+    '4) Koleksi data lintas platform',
+    '5) Normalisasi + analisis isu/jejaring',
+    '6) Reporting + evidence bundle',
+    '7) Forensik media (EXIF & arsip)',
+    '8) Legal/etika & compliance checklist',
     '0) Keluar dari workflow',
     '',
     `Balas angka pilihan (mis. *1*) atau ketik *${env.BOT_PREFIX}back* untuk kembali.`
@@ -38,46 +44,79 @@ function buildMainMenu() {
 }
 
 function buildSubmenu(stage) {
+  if (stage === WORKFLOW_STAGE.SEEDING) {
+    return [
+      '🎯 *Tahap 0: Seed Definition & Scoping*',
+      '',
+      '1) Definisikan seed username/email/link',
+      '2) Definisikan keyword/hashtag isu',
+      '3) Lanjut ke discovery kandidat akun',
+      '9) Kembali ke menu utama'
+    ].join('\n');
+  }
+
   if (stage === WORKFLOW_STAGE.DISCOVERY) {
     return [
-      '🔎 *Tahap 1: Discovery & Validasi Akun*',
+      '🔎 *Tahap 1: Discovery Kandidat Akun*',
       '',
       '1) Username sweep cepat (Sherlock)',
-      '2) Username dossier mendalam (Maigret)',
-      '3) Email footprint (Holehe)',
-      '4) Lanjut ke tahap koleksi data',
+      '2) Username sweep skala besar (Maigret)',
+      '3) Email footprint triage (Holehe)',
+      '4) Lanjut ke verifikasi manual',
+      '9) Kembali ke menu utama'
+    ].join('\n');
+  }
+
+  if (stage === WORKFLOW_STAGE.VERIFICATION) {
+    return [
+      '✅ *Tahap 2: Verifikasi Manual Kandidat*',
+      '',
+      '1) Cek konsistensi profile URL/username',
+      '2) Cek bio/link/ciri visual sebelum scraping dalam',
+      '3) Lanjut ke koleksi lintas platform',
       '9) Kembali ke menu utama'
     ].join('\n');
   }
 
   if (stage === WORKFLOW_STAGE.COLLECTION) {
     return [
-      '📥 *Tahap 2: Koleksi Data*',
+      '📥 *Tahap 3: Koleksi Data Lintas Platform*',
       '',
       '1) Instagram collector (Instaloader)',
       '2) Domain intel (theHarvester)',
       '3) Google dork dokumen (dorkdoc)',
       '4) Social media intel ringkas (socmint)',
-      '5) Lanjut ke tahap analisis isu',
+      '5) Lanjut ke normalisasi + analisis',
       '9) Kembali ke menu utama'
     ].join('\n');
   }
 
   if (stage === WORKFLOW_STAGE.ANALYSIS) {
     return [
-      '📊 *Tahap 3: Analisis Isu & Jejaring*',
+      '📊 *Tahap 4: Normalisasi + Analisis Isu & Jejaring*',
       '',
       '1) Twitter/X Issue Hunter (xissue)',
       '2) TikTok Issue Hunter (ttissue)',
       '3) Mini graph OSINT (minim)',
-      '4) Lanjut ke tahap forensik media',
+      '4) Lanjut ke reporting evidence bundle',
+      '9) Kembali ke menu utama'
+    ].join('\n');
+  }
+
+  if (stage === WORKFLOW_STAGE.REPORTING) {
+    return [
+      '🗂️ *Tahap 5: Reporting & Evidence Bundle*',
+      '',
+      '1) Generate social-media-intel JSON bundle',
+      '2) Export graph Neo4j CSV (minim)',
+      '3) Lanjut ke forensik media',
       '9) Kembali ke menu utama'
     ].join('\n');
   }
 
   if (stage === WORKFLOW_STAGE.FORENSIC) {
     return [
-      '🧪 *Tahap 4: Forensik Media*',
+      '🧪 *Tahap 6: Forensik Media*',
       '',
       `1) EXIF metadata (kirim/reply gambar lalu *${env.BOT_PREFIX}exif*)`,
       '2) Rekomendasi arsip media (instaloader + dorkdoc)',
@@ -88,7 +127,7 @@ function buildSubmenu(stage) {
 
   if (stage === WORKFLOW_STAGE.COMPLIANCE) {
     return [
-      '⚖️ *Tahap 5: Legal/Etika & Compliance*',
+      '⚖️ *Tahap 7: Legal/Etika & Compliance*',
       '',
       'Checklist sebelum eksekusi lanjutan:',
       '- Validasi otorisasi & tujuan investigasi',
@@ -111,10 +150,18 @@ function hasActiveWorkflow(sessionId) {
 
 function getActionHint(stage, option) {
   const hintByStage = {
+    [WORKFLOW_STAGE.SEEDING]: {
+      1: `Seed siap untuk command: ${env.BOT_PREFIX}socmint <handle_csv|-> <email_csv|-> <link_csv|-> <keyword_csv|-> <hashtag_csv|->`,
+      2: `Gunakan keyword/hashtag ringkas lalu uji: ${env.BOT_PREFIX}xissue <keyword_csv> <window_menit|60>`
+    },
     [WORKFLOW_STAGE.DISCOVERY]: {
       1: `Jalankan: ${env.BOT_PREFIX}sherlock <username>`,
       2: `Jalankan: ${env.BOT_PREFIX}maigret <username>`,
       3: `Jalankan: ${env.BOT_PREFIX}holehe <email>`
+    },
+    [WORKFLOW_STAGE.VERIFICATION]: {
+      1: 'Verifikasi manual: buka kandidat URL, cocokkan handle/display name/avatar antar platform',
+      2: 'Catat bukti verifikasi: screenshot, timestamp, dan alasan validasi sebelum koleksi lanjut'
     },
     [WORKFLOW_STAGE.COLLECTION]: {
       1: `Jalankan: ${env.BOT_PREFIX}instaloader <username>`,
@@ -126,6 +173,10 @@ function getActionHint(stage, option) {
       1: `Jalankan: ${env.BOT_PREFIX}xissue <keyword_csv> <window_menit|60>`,
       2: `Jalankan: ${env.BOT_PREFIX}ttissue <submenu|all> <keyword_csv> <window_menit|60>`,
       3: `Jalankan: ${env.BOT_PREFIX}minim <domain|-> <email_csv|-> <username_csv|->`
+    },
+    [WORKFLOW_STAGE.REPORTING]: {
+      1: `Jalankan: ${env.BOT_PREFIX}socmint <handle_csv|-> <email_csv|-> <link_csv|-> <keyword_csv|-> <hashtag_csv|->`,
+      2: `Jalankan: ${env.BOT_PREFIX}minim <domain|-> <email_csv|-> <username_csv|->`
     },
     [WORKFLOW_STAGE.FORENSIC]: {
       1: `Jalankan: ${env.BOT_PREFIX}exif (dengan reply gambar)`,
@@ -161,11 +212,14 @@ function handleWorkflowInput(rawText, sessionId) {
 
   if (stage === WORKFLOW_STAGE.MAIN) {
     const map = {
-      '1': WORKFLOW_STAGE.DISCOVERY,
-      '2': WORKFLOW_STAGE.COLLECTION,
-      '3': WORKFLOW_STAGE.ANALYSIS,
-      '4': WORKFLOW_STAGE.FORENSIC,
-      '5': WORKFLOW_STAGE.COMPLIANCE
+      '1': WORKFLOW_STAGE.SEEDING,
+      '2': WORKFLOW_STAGE.DISCOVERY,
+      '3': WORKFLOW_STAGE.VERIFICATION,
+      '4': WORKFLOW_STAGE.COLLECTION,
+      '5': WORKFLOW_STAGE.ANALYSIS,
+      '6': WORKFLOW_STAGE.REPORTING,
+      '7': WORKFLOW_STAGE.FORENSIC,
+      '8': WORKFLOW_STAGE.COMPLIANCE
     };
 
     if (map[input]) {
@@ -182,9 +236,12 @@ function handleWorkflowInput(rawText, sessionId) {
   }
 
   const navNext = {
-    [WORKFLOW_STAGE.DISCOVERY]: { '4': WORKFLOW_STAGE.COLLECTION },
+    [WORKFLOW_STAGE.SEEDING]: { '3': WORKFLOW_STAGE.DISCOVERY },
+    [WORKFLOW_STAGE.DISCOVERY]: { '4': WORKFLOW_STAGE.VERIFICATION },
+    [WORKFLOW_STAGE.VERIFICATION]: { '3': WORKFLOW_STAGE.COLLECTION },
     [WORKFLOW_STAGE.COLLECTION]: { '5': WORKFLOW_STAGE.ANALYSIS },
-    [WORKFLOW_STAGE.ANALYSIS]: { '4': WORKFLOW_STAGE.FORENSIC },
+    [WORKFLOW_STAGE.ANALYSIS]: { '4': WORKFLOW_STAGE.REPORTING },
+    [WORKFLOW_STAGE.REPORTING]: { '3': WORKFLOW_STAGE.FORENSIC },
     [WORKFLOW_STAGE.FORENSIC]: { '3': WORKFLOW_STAGE.COMPLIANCE },
     [WORKFLOW_STAGE.COMPLIANCE]: { '1': WORKFLOW_STAGE.MAIN }
   };
